@@ -1,4 +1,4 @@
-# simple_agent.py / lf_simulation.py
+# simple_agent_chatgpt.py / lf_simulation.py
 
 from qiskit import QuantumCircuit
 from qiskit_aer import AerSimulator
@@ -314,15 +314,15 @@ def main():
     else:
         print("=> No violation with current angles (try finer scan or different ranges).")
 
-def export_all_circuits():
-    export_circuit_for_setting(1, 1, "circuit_A1B1.pdf")
-    export_circuit_for_setting(1, 2, "circuit_A1B2.pdf")
-    export_circuit_for_setting(2, 1, "circuit_A2B1.pdf")
-    export_circuit_for_setting(2, 2, "circuit_A2B2.pdf")
+#def export_all_circuits():
+#    export_circuit_for_setting(1, 1, "circuit_A1B1.pdf")
+#    export_circuit_for_setting(1, 2, "circuit_A1B2.pdf")
+#    export_circuit_for_setting(2, 1, "circuit_A2B1.pdf")
+#    export_circuit_for_setting(2, 2, "circuit_A2B2.pdf")
 
 
 if __name__ == "__main__":
     # Uncomment once to export the circuits, then run
-    export_all_circuits()
+    #export_all_circuits()
     main()
 

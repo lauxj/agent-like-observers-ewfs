@@ -80,5 +80,7 @@ qc5.cx(0,1)
 qc5.cx(1,2)
 
 qc5.draw("mpl")
-plt.show()
+#plt.show()
+
+
 
