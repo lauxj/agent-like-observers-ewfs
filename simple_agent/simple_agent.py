@@ -71,6 +71,28 @@ def base_ewfs_circuit() -> QuantumCircuit:
 
     return qc
 
+from qiskit.visualization import circuit_drawer
+
+
+def export_circuit_for_setting(x: int, y: int, filename: str) -> None:
+    """
+    Build the EWFS circuit for settings (x,y) and export it
+    as a PDF figure suitable for inclusion in the thesis.
+    Only for documentation, not used in simulation.
+    """
+    qc = base_ewfs_circuit()
+    apply_alice(qc, x)
+    apply_bob(qc, y)
+
+    # Optional: remove measurements if you want the logical unitary only
+    # qc.remove_final_measurements()
+
+    circuit_drawer(
+        qc,
+        output="mpl",
+        fold=-1,          # keep on one line if possible
+        filename=filename # e.g. "circuit_A1B2.pdf"
+    )
 
 # ----------------------------------------------------------------------
 # Alice's settings A1, A2, A3
@@ -292,6 +314,15 @@ def main():
     else:
         print("=> No violation with current angles (try finer scan or different ranges).")
 
+def export_all_circuits():
+    export_circuit_for_setting(1, 1, "circuit_A1B1.pdf")
+    export_circuit_for_setting(1, 2, "circuit_A1B2.pdf")
+    export_circuit_for_setting(2, 1, "circuit_A2B1.pdf")
+    export_circuit_for_setting(2, 2, "circuit_A2B2.pdf")
+
 
 if __name__ == "__main__":
+    # Uncomment once to export the circuits, then run
+    export_all_circuits()
     main()
+
