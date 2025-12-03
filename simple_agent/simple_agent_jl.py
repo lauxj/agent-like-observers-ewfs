@@ -22,16 +22,14 @@ def build_measurement(A_setting, B_setting, alpha2, alpha3, beta2, beta3):
     qr1 = QuantumRegister(1, "S_C")
     qr2 = QuantumRegister(1, "F_C")
     qr3 = QuantumRegister(1, "S_D")
-    qr4 = QuantumRegister(1, "F_D")
-    cr = ClassicalRegister(2, "c")
+    cr = ClassicalRegister(2, "c")  # classical register to store the measurement outcomes
 
-    qc = QuantumCircuit(qr1, qr2, qr3, qr4, cr)
+    qc = QuantumCircuit(qr1, qr2, qr3, cr)
 
     # --- pre-measurement ---
-    qc.h(qr1[0])
-    qc.cx(qr1[0], qr3[0])
-    qc.cx(qr1[0], qr2[0])
-    qc.cx(qr3[0], qr4[0])
+    qc.h(qr1[0])          # create superposition on S_C
+    qc.cx(qr1[0], qr3[0]) # entangle S_C with S_D (Bell state)
+    qc.cx(qr1[0], qr2[0]) # Charlie "measures" S_C into F_C
 
     # --------------------------------
     # Alice's setting
@@ -53,16 +51,15 @@ def build_measurement(A_setting, B_setting, alpha2, alpha3, beta2, beta3):
         #qc.draw("mpl")
         #plt.show()
     # --------------------------------
-    # Bob's setting
+    # Bob's setting (no Debbie friend)
     # --------------------------------
     if B_setting == 1:
-        # PEEK: measure friend's memory directly
-        qc.measure(qr4[0], cr[1])
+        # PEEK-like: direct Z-basis measurement on S_D
+        qc.measure(qr3[0], cr[1])
         #qc.draw("mpl")
         #plt.show()
     else:
-        # REVERSE needed
-        qc.cx(qr3[0], qr4[0])  # undo Debbie
+        # Different bases on S_D via R_y rotations
         if B_setting == 2:
             qc.ry(beta2, qr3[0])
         elif B_setting == 3:
@@ -127,9 +124,20 @@ def S_SB(alpha3, beta2, beta3, shots=20000):
     S = -E_A1B2 + E_A1B3 - E_A3B2 - E_A3B3 - 2
     return S
 
+def analytic_optimal_angles():
+    """
+    Analytic angles for the Bell-plus implementation of the Semi-Brukner scenario.
+    These angles yield the theoretical maximum S_SB = 2*sqrt(2) - 2 for the ideal noiseless model.
+    Returns (alpha3, beta2, beta3).
+    """
+    beta2 = 3.0 * np.pi / 4.0      # 135 degrees
+    beta3 = 1.0 * np.pi / 4.0      # 45 degrees
+    alpha3 = 3.0 * np.pi / 2.0     # 270 degrees
+    return alpha3, beta2, beta3
+
 def optimise_S_SB(shots=10000, n_grid=100):
-    angles = np.linspace(0, np.pi, n_grid)
-    best_S = 0
+    angles = np.linspace(0, 2*np.pi, n_grid)
+    best_S = -np.inf
     best_thetas = (None, None, None)
 
     for a3 in angles:
@@ -173,6 +181,13 @@ if best_S > 0:
 else:
     print("→ No violation found on this grid.")
 
+# Analytic optimal angles (Bell-plus state)
+alpha3_opt, beta2_opt, beta3_opt = analytic_optimal_angles()
+S_analytic = S_SB(alpha3_opt, beta2_opt, beta3_opt, shots=10000)
+
+print(f"Analytic angles: alpha3 = {alpha3_opt:.3f}, beta2 = {beta2_opt:.3f}, beta3 = {beta3_opt:.3f}")
+print(f"S_SB at analytic angles ≈ {S_analytic:.3f}")
+
 # Plot the circuits
-a3, b2, b3 = best_thetas
+a3, b2, b3 = alpha3_opt, beta2_opt, beta3_opt
 plot_SB_circuits(a3, b2, b3)
