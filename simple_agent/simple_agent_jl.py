@@ -9,64 +9,55 @@ from sympy.abc import theta
 #build all circuits
 def build_measurement(A_setting, B_setting, alpha2, alpha3, beta2, beta3):
     """
-    Build the circuit for Alice-setting A_setting (1,2,3)
-    and Bob-setting B_setting (1,2,3).
-    alpha2 = angle for Alice REVERSE-1
-    alpha3 = angle for Alice REVERSE-2
-    beta2 = angle for Bob REVERSE-1
-    beta3 = angle for Bob REVERSE-2
-    returns the quantum circuit qc for the input settings
+    Build the circuit for settings A_setting (1,2,3) and B_setting (1,2,3).
+    Includes Charlie's friend F_C.
+    S_D is measured directly by Bob with no Debbie.
     """
 
     # quantum registers
-    qr1 = QuantumRegister(1, "S_C")
-    qr2 = QuantumRegister(1, "F_C")
-    qr3 = QuantumRegister(1, "S_D")
-    cr = ClassicalRegister(2, "c")  # classical register to store the measurement outcomes
+    qr_SC = QuantumRegister(1, "S_C")
+    qr_FC = QuantumRegister(1, "F_C")
+    qr_SD = QuantumRegister(1, "S_D")
+    cr = ClassicalRegister(2, "c")         # store A and B outcomes
 
-    qc = QuantumCircuit(qr1, qr2, qr3, cr)
+    qc = QuantumCircuit(qr_SC, qr_FC, qr_SD, cr)
 
-    # --- pre-measurement ---
-    qc.h(qr1[0])          # create superposition on S_C
-    qc.cx(qr1[0], qr3[0]) # entangle S_C with S_D (Bell state)
-    qc.cx(qr1[0], qr2[0]) # Charlie "measures" S_C into F_C
+    # --- PRE-MEASUREMENT ---
+    qc.h(qr_SC[0])                 # create |+> on S_C
+    qc.cx(qr_SC[0], qr_SD[0])      # entangle → Bell pair
+    qc.cx(qr_SC[0], qr_FC[0])      # Charlie pre-measures S_C
 
     # --------------------------------
-    # Alice's setting
+    # Alice: A1 (peek) or A2/A3 (reverse)
     # --------------------------------
     if A_setting == 1:
-        # PEEK: measure friend's memory directly
-        qc.measure(qr2[0], cr[0])
-        #qc.draw("mpl")
-        #plt.show()
+        # PEEK: measure F_C directly
+        qc.measure(qr_FC[0], cr[0])
+
     else:
-        # REVERSE needed
-        qc.cx(qr1[0], qr2[0])  # undo Charlie
-        # choose angle
+        # REVERSE: undo Charlie then rotate S_C
+        qc.cx(qr_SC[0], qr_FC[0])
         if A_setting == 2:
-            qc.ry(alpha2, qr1[0])
+            qc.ry(alpha2, qr_SC[0])
         elif A_setting == 3:
-            qc.ry(alpha3, qr1[0])
-        qc.measure(qr1[0], cr[0])
-        #qc.draw("mpl")
-        #plt.show()
+            qc.ry(alpha3, qr_SC[0])
+        qc.measure(qr_SC[0], cr[0])
+
     # --------------------------------
-    # Bob's setting (no Debbie friend)
+    # Bob: B1 (peek), B2/B3 (reverse)
     # --------------------------------
     if B_setting == 1:
-        # PEEK-like: direct Z-basis measurement on S_D
-        qc.measure(qr3[0], cr[1])
-        #qc.draw("mpl")
-        #plt.show()
+        # PEEK: measure S_D directly
+        qc.measure(qr_SD[0], cr[1])
+
     else:
-        # Different bases on S_D via R_y rotations
+        # REVERSE / interfering measurement on S_D via rotation
         if B_setting == 2:
-            qc.ry(beta2, qr3[0])
+            qc.ry(beta2, qr_SD[0])
         elif B_setting == 3:
-            qc.ry(beta3, qr3[0])
-        qc.measure(qr3[0], cr[1])
-        #qc.draw("mpl")
-        #plt.show()
+            qc.ry(beta3, qr_SD[0])
+        qc.measure(qr_SD[0], cr[1])
+
     return qc
 
 
@@ -127,7 +118,6 @@ def S_SB(alpha3, beta2, beta3, shots=20000):
 def analytic_optimal_angles():
     """
     Analytic angles for the Bell-plus implementation of the Semi-Brukner scenario.
-    These angles yield the theoretical maximum S_SB = 2*sqrt(2) - 2 for the ideal noiseless model.
     Returns (alpha3, beta2, beta3).
     """
     beta2 = 3.0 * np.pi / 4.0      # 135 degrees
@@ -135,20 +125,6 @@ def analytic_optimal_angles():
     alpha3 = 3.0 * np.pi / 2.0     # 270 degrees
     return alpha3, beta2, beta3
 
-def optimise_S_SB(shots=10000, n_grid=100):
-    angles = np.linspace(0, 2*np.pi, n_grid)
-    best_S = -np.inf
-    best_thetas = (None, None, None)
-
-    for a3 in angles:
-        for b2 in angles:
-            for b3 in angles:
-                S = S_SB(a3, b2, b3, shots=shots)
-                if S > best_S:
-                    best_S = S
-                    best_thetas = (a3, b2, b3)
-
-    return best_S, best_thetas
 
 def plot_SB_circuits(alpha3, beta2, beta3):
     """
@@ -171,15 +147,6 @@ def plot_SB_circuits(alpha3, beta2, beta3):
 
 
 
-best_S, best_thetas = optimise_S_SB(shots=10000, n_grid=15)
-
-print(f"Best S_SB ≈ {best_S:.3f}")
-print(f"Best angles: alpha3 ≈ {best_thetas[0]:.3f}, beta2 ≈ {best_thetas[1]:.3f}, beta3 ≈ {best_thetas[2]:.3f}")
-
-if best_S > 0:
-    print("→ Local Friendliness (semi-Brukner) is violated.")
-else:
-    print("→ No violation found on this grid.")
 
 # Analytic optimal angles (Bell-plus state)
 alpha3_opt, beta2_opt, beta3_opt = analytic_optimal_angles()
