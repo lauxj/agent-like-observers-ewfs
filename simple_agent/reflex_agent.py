@@ -3,13 +3,12 @@ from qiskit import QuantumCircuit, QuantumRegister, ClassicalRegister
 import matplotlib.pyplot as plt
 from qiskit.visualization import plot_histogram
 from qiskit_aer import AerSimulator
-from sympy.abc import theta
 
 
-#build all circuits
-def build_measurement(A_setting, B_setting, alpha2, alpha3, beta2, beta3):
+#Build all circuits:
+def build_measurement(A_setting, B_setting, alpha, beta1, beta2):
     """
-    Build the circuit for settings A_setting (1,2,3) and B_setting (1,2,3).
+    Build the circuit for settings A_setting (1,2) and B_setting (1,2) and angles alpha1 and beta1, beta2.
     Includes Charlie's friend F_C.
     S_D is measured directly by Bob with no Debbie.
     """
@@ -17,10 +16,11 @@ def build_measurement(A_setting, B_setting, alpha2, alpha3, beta2, beta3):
     # quantum registers
     qr_SC = QuantumRegister(1, "S_C")
     qr_FC = QuantumRegister(1, "F_C")
+    qr_LC = QuantumRegister(1, "LC")
     qr_SD = QuantumRegister(1, "S_D")
     cr = ClassicalRegister(2, "c")         # store A and B outcomes
 
-    qc = QuantumCircuit(qr_SC, qr_FC, qr_SD, cr)
+    qc = QuantumCircuit(qr_SC, qr_FC, qr_LC, qr_SD, cr)
 
     # --- PRE-MEASUREMENT ---
     qc.h(qr_SC[0])                 # create |+> on S_C
@@ -28,39 +28,33 @@ def build_measurement(A_setting, B_setting, alpha2, alpha3, beta2, beta3):
     qc.cx(qr_SC[0], qr_FC[0])      # Charlie pre-measures S_C
 
     # --------------------------------
-    # Alice: A1 (peek) or A2/A3 (reverse)
+    # Alice setting
     # --------------------------------
     if A_setting == 1:
-        # PEEK: measure F_C directly
+        # Measure F_C directly
         qc.measure(qr_FC[0], cr[0])
 
-    else:
-        # REVERSE: undo Charlie then rotate S_C
+    if A_setting == 2:
+        # Undo Charlie, then rotate S_C and measure
         qc.cx(qr_SC[0], qr_FC[0])
-        if A_setting == 2:
-            qc.ry(alpha2, qr_SC[0])
-        elif A_setting == 3:
-            qc.ry(alpha3, qr_SC[0])
+        qc.ry(alpha, qr_SC[0])
         qc.measure(qr_SC[0], cr[0])
 
     # --------------------------------
-    # Bob: B1 (peek), B2/B3 (reverse)
+    # Bob setting
     # --------------------------------
     if B_setting == 1:
-        # PEEK: measure S_D directly
+        # Measure S_D directly in rotated basis beta1
+        qc.ry(beta1, qr_SD[0])
         qc.measure(qr_SD[0], cr[1])
 
-    else:
-        # REVERSE / interfering measurement on S_D via rotation
-        if B_setting == 2:
-            qc.ry(beta2, qr_SD[0])
-        elif B_setting == 3:
-            qc.ry(beta3, qr_SD[0])
+    if B_setting == 2:
+        qc.ry(beta2, qr_SD[0])
         qc.measure(qr_SD[0], cr[1])
 
     return qc
 
-
+# Simulator we use:
 sim = AerSimulator()
 
 def exp_values_from_counts(counts, shots):
@@ -83,78 +77,75 @@ def exp_values_from_counts(counts, shots):
     return exp_A, exp_B, exp_AB
 
 
-def expectation_AB(A_setting, B_setting, alpha2, alpha3, beta2, beta3, shots=20000):
+def expectation_AB(A_setting, B_setting, alpha, beta1, beta2, shots=20000):
     """
-    Build circuit for given (A_i, B_j), run it
+    Build circuit for given settings and run it
     using the function exp_values_from_counts above
-    returns <A>, <B>, <AB> for the chosen settings A_setting and B_setting element of {1,2,3}
+    returns <AB> for the chosen settings A_setting and B_setting in {1,2}
     """
-    qc = build_measurement(A_setting, B_setting, alpha2, alpha3, beta2, beta3)
+    qc = build_measurement(A_setting, B_setting, alpha, beta1, beta2)
     result = sim.run(qc, shots=shots).result()
     counts = result.get_counts()
     return exp_values_from_counts(counts, shots)
 
 
-def S_SB(alpha3, beta2, beta3, shots=20000):
+def S_SB(alpha, beta1, beta2, shots=20000):
     """
-    Semi-Brukner S_SB for given angles alpha3, beta2, beta3.
-    Uses:
-        A1 = PEEK (1)
-        A2 = REVERSE-1 (2) fixed at 0
-        A3 = REVERSE-2 (3)
-        B2 = REVERSE-1 (2)
-        B3 = REVERSE-2 (3)
+    Semi-Brukner S_SB for given angles alpha, beta1, beta2.
+    Uses: A1, A2, B1, B2
     """
-    alpha2 = 0.0
-    # Only need the correlators <A_i B_j>
-    _, _, E_A1B2 = expectation_AB(1, 2, alpha2, alpha3, beta2, beta3, shots)
-    _, _, E_A1B3 = expectation_AB(1, 3, alpha2, alpha3, beta2, beta3, shots)
-    _, _, E_A3B2 = expectation_AB(3, 2, alpha2, alpha3, beta2, beta3, shots)
-    _, _, E_A3B3 = expectation_AB(3, 3, alpha2, alpha3, beta2, beta3, shots)
+    #alpha = 0.0
+    # Correlators needed for SB in minimal scenario with one friend Charlie
+    _, _, E_A1B1 = expectation_AB(1, 1, alpha, beta1, beta2, shots)
+    _, _, E_A1B2 = expectation_AB(1, 2, alpha, beta1, beta2, shots)
+    _, _, E_A2B1 = expectation_AB(2, 1, alpha, beta1, beta2, shots)
+    _, _, E_A2B2 = expectation_AB(2, 2, alpha, beta1, beta2, shots)
 
-    S = -E_A1B2 + E_A1B3 - E_A3B2 - E_A3B3 - 2
+    # SB inequality for minimal scenario with one friend:
+    S = -E_A1B1 + E_A1B2 - E_A2B1 - E_A2B2 - 2
     return S
+
 
 def analytic_optimal_angles():
     """
     Analytic angles for the Bell-plus implementation of the Semi-Brukner scenario.
-    Returns (alpha3, beta2, beta3).
+    Returns (alpha, beta1, beta2).
     """
-    beta2 = 3.0 * np.pi / 4.0      # 135 degrees
-    beta3 = 1.0 * np.pi / 4.0      # 45 degrees
-    alpha3 = 3.0 * np.pi / 2.0     # 270 degrees
-    return alpha3, beta2, beta3
+    alpha = 3.0 * np.pi / 2.0     # 270 degrees
+    beta1 = 3.0 * np.pi / 4.0      # 135 degrees
+    beta2 = 1.0 * np.pi / 4.0      # 45 degrees
+
+    return alpha, beta1, beta2
 
 
-def plot_SB_circuits(alpha3, beta2, beta3):
+def plot_SB_circuits(alpha, beta1, beta2):
     """
     Plot the four circuits used in the Semi-Brukner inequality.
     """
-    alpha2 = 0.0  # fixed for S_SB
+    #alpha2 = 0.0  # fixed for S_SB
 
     settings = [
+        ("A1B1", 1, 1),
         ("A1B2", 1, 2),
-        ("A1B3", 1, 3),
-        ("A3B2", 3, 2),
-        ("A3B3", 3, 3),
+        ("A2B1", 2, 1),
+        ("A2B2", 2, 2),
     ]
 
     for name, A, B in settings:
-        qc = build_measurement(A, B, alpha2, alpha3, beta2, beta3)
+        qc = build_measurement(A, B, alpha, beta1, beta2)
         fig = qc.draw("mpl")
         fig.suptitle(f"Circuit {name}", fontsize=14)
         plt.show()
 
 
-
-
 # Analytic optimal angles (Bell-plus state)
-alpha3_opt, beta2_opt, beta3_opt = analytic_optimal_angles()
-S_analytic = S_SB(alpha3_opt, beta2_opt, beta3_opt, shots=10000)
+alpha = 3.0 * np.pi / 2.0     # 270 degrees
+beta1 = 3.0 * np.pi / 4.0      # 135 degrees
+beta2 = 1.0 * np.pi / 4.0      # 45 degrees
 
-print(f"Analytic angles: alpha3 = {alpha3_opt:.3f}, beta2 = {beta2_opt:.3f}, beta3 = {beta3_opt:.3f}")
-print(f"S_SB at analytic angles ≈ {S_analytic:.3f}")
+S_analytic = S_SB(alpha, beta1, beta2, shots=10000)
+print(f"S_SB at optimal angles ≈ {S_analytic:.3f}")
 
 # Plot the circuits
-a3, b2, b3 = alpha3_opt, beta2_opt, beta3_opt
-plot_SB_circuits(a3, b2, b3)
+plot_SB_circuits(alpha, beta1, beta2)
+
