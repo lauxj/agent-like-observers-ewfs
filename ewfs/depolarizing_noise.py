@@ -408,18 +408,7 @@ if __name__ == "__main__":
     # Edit numbers
     run_all_agents(p1=0.002, p2=0.02, p_meas=0.01, shots=10_000)
 
-    # Optional 1D sweeps
-    #sweep_plot(p_list=[0.0, 0.001, 0.002, 0.003, 0.004, 0.005], p2_scale=10.0, p_meas=0.01, shots=5_000)
-    #find_violation_thresholds(p_list=np.linspace(0.0, 0.01, 11), p2_scale=10.0, p_meas=0.01, shots=10_000)
-
-    # NEW: sweep vs p2 (fixed p1)
-    #sweep_plot_p2(p2_list=np.linspace(0.0, 0.05, 11), p1=0.001, p_meas=0.01, shots=5_000)
-    #find_violation_thresholds_p2(p2_list=np.linspace(0.0, 0.05, 11), p1=0.001, p_meas=0.01, shots=10_000)
-
-    # NEW: 2D combined sweep over (p1, p2)
-    # NOTE: Larger ranges + finer grids increase runtime quadratically.
-    # Reduce shots or grid size if this becomes slow.
-    # Extended axis ranges to see where the violation fully disappears
+    # 2D combined sweep over (p1, p2)
     sweep_grid_p1_p2(
         p1_list=np.linspace(0.0, 0.03, 11),   # same range, fewer points (faster)
         p2_list=np.linspace(0.0, 0.12, 11),   # same range, fewer points (faster)
