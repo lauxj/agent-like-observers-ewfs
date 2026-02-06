@@ -219,7 +219,7 @@ def find_violation_thresholds(
     plt.title("Depolarizing Noise: Violation Threshold (S_SB > 0)")
     plt.legend()
     plt.tight_layout()
-
+    plt.savefig(filename, dpi=300, bbox_inches="tight")
     plt.close()
 
     print("\n=== Estimated thresholds (last sampled p1 with S_SB > 0) ===")
@@ -234,10 +234,195 @@ def find_violation_thresholds(
     return results
 
 
+# ----------------------------
+# Sweep vs p2 (fixed p1)
+# ----------------------------
+
+def sweep_plot_p2(p2_list, p1=0.0, p_meas=0.0, shots=5_000, filename="S_SB_depolarizing_sweep_p2.pdf"):
+    """Thesis-ready PDF plot of S_SB vs p2 for a fixed p1 and p_meas."""
+    alpha, beta1, beta2 = optimal_angles()
+
+    agents = [
+        ("Reflex Agent", reflex_agent.build_measurement),
+        ("Guessing Agent", guessing_agent.build_measurement),
+        ("Betting Agent", betting_agent.build_measurement),
+    ]
+
+    plt.figure(figsize=(6.5, 4.0))
+
+    for name, build_fn in agents:
+        y = []
+        for p2 in p2_list:
+            sim = AerSimulator(noise_model=make_noise(p1, p2, p_meas))
+            y.append(S_SB(build_fn, alpha, beta1, beta2, sim, shots))
+
+        plt.plot(p2_list, y, marker="o", label=name)
+
+    plt.axhline(0.0, linestyle="--", linewidth=1)
+    plt.xlabel("2-qubit depolarizing probability p2")
+    plt.ylabel(r"$S_{\mathrm{SB}}$")
+    plt.title(f"Depolarizing Noise Sweep vs p2 (fixed p1={p1}, p_meas={p_meas})")
+    plt.legend()
+    plt.tight_layout()
+
+    plt.savefig(filename, dpi=300, bbox_inches="tight")
+    plt.close()
+    print(f"Saved plot: {filename}")
+
+
+def find_violation_thresholds_p2(
+    p2_list,
+    p1=0.0,
+    p_meas=0.0,
+    shots=10_000,
+    filename="S_SB_depolarizing_thresholds_p2.pdf",
+):
+    """Sweep p2 (with fixed p1) and find the last p2 where each agent violates (S_SB > 0)."""
+    alpha, beta1, beta2 = optimal_angles()
+
+    agents = [
+        ("Reflex Agent", reflex_agent.build_measurement),
+        ("Guessing Agent", guessing_agent.build_measurement),
+        ("Betting Agent", betting_agent.build_measurement),
+    ]
+
+    results = {}
+    plt.figure(figsize=(6.5, 4.2))
+
+    for name, build_fn in agents:
+        y = []
+        for p2 in p2_list:
+            sim = AerSimulator(noise_model=make_noise(p1, p2, p_meas))
+            y.append(S_SB(build_fn, alpha, beta1, beta2, sim, shots))
+
+        threshold = None
+        for p2, s_val in zip(p2_list, y):
+            if s_val > 0:
+                threshold = p2
+
+        results[name] = {"p2_list": list(p2_list), "S": y, "threshold": threshold}
+
+        plt.plot(p2_list, y, marker="o", label=name)
+        if threshold is not None:
+            plt.axvline(threshold, linestyle="--", linewidth=1)
+
+    plt.axhline(0.0, linestyle="--", linewidth=1)
+    plt.xlabel("2-qubit depolarizing probability p2")
+    plt.ylabel(r"$S_{\mathrm{SB}}$")
+    plt.title(f"Violation Threshold vs p2 (fixed p1={p1}, p_meas={p_meas})")
+    plt.legend()
+    plt.tight_layout()
+
+    plt.savefig(filename, dpi=300, bbox_inches="tight")
+    plt.close()
+
+    print("\n=== Estimated p2 thresholds (last sampled p2 with S_SB > 0) ===")
+    for name in results:
+        thr = results[name]["threshold"]
+        if thr is None:
+            print(f"{name}: no violation for any tested p2")
+        else:
+            print(f"{name}: threshold ≈ {thr}")
+
+    print(f"Saved plot: {filename}")
+    return results
+
+
+def sweep_grid_p1_p2(
+    p1_list,
+    p2_list,
+    p_meas=0.0,
+    shots=5_000,
+    out_prefix="S_SB_grid",
+):
+    """Beginner-friendly 2D sweep over (p1, p2).
+
+    Saves one PDF per agent: {out_prefix}_{agent}_pmeas{p_meas}.pdf
+    Heatmap shows S_SB(p1,p2) with a contour at S_SB=0.
+    """
+    alpha, beta1, beta2 = optimal_angles()
+
+    agents = [
+        ("Reflex Agent", reflex_agent.build_measurement),
+        ("Guessing Agent", guessing_agent.build_measurement),
+        ("Betting Agent", betting_agent.build_measurement),
+    ]
+
+    p1_list = list(p1_list)
+    p2_list = list(p2_list)
+
+    for agent_name, build_fn in agents:
+        S_grid = np.zeros((len(p2_list), len(p1_list)))
+
+        for i, p2 in enumerate(p2_list):
+            for j, p1 in enumerate(p1_list):
+                sim = AerSimulator(noise_model=make_noise(p1, p2, p_meas))
+                S_grid[i, j] = S_SB(build_fn, alpha, beta1, beta2, sim, shots)
+
+        plt.figure(figsize=(7.2, 5.0))
+
+        # Heatmap of S_SB values
+        img = plt.imshow(
+            S_grid,
+            origin="lower",
+            aspect="auto",
+            extent=[min(p1_list), max(p1_list), min(p2_list), max(p2_list)],
+        )
+        plt.colorbar(img, label=r"$S_{\mathrm{SB}}$")
+
+        # Make the violation region (S_SB > 0) visually obvious
+        X, Y = np.meshgrid(p1_list, p2_list)
+        # Red boundary where violation disappears: S_SB = 0
+        plt.contour(
+            X,
+            Y,
+            S_grid,
+            levels=[0.0],
+            colors="red",
+            linewidths=2.5,
+        )
+
+        plt.xlabel("1-qubit depolarizing probability p1")
+        plt.ylabel("2-qubit depolarizing probability p2")
+        plt.title(f"{agent_name}: Violation Region (S_SB > 0), p_meas={p_meas}")
+
+        # Add a small label on the plot
+        plt.text(
+            0.02,
+            0.98,
+            "Red line: S_SB = 0 (violation boundary)",
+            transform=plt.gca().transAxes,
+            verticalalignment="top",
+            fontsize=10,
+        )
+
+        plt.tight_layout()
+        plt.show()
+
+        best = float(np.max(S_grid))
+        any_violation = bool(np.any(S_grid > 0.0))
+        print(f"Shown plot for {agent_name} | max S_SB={best:.3f} | any violation={any_violation}")
+
+
 if __name__ == "__main__":
     # Edit numbers
     run_all_agents(p1=0.002, p2=0.02, p_meas=0.01, shots=10_000)
 
-    # Optional sweep plot (uncomment)
-    sweep_plot(p_list=[0.0, 0.001, 0.002, 0.003, 0.004, 0.005], p2_scale=10.0, p_meas=0.01, shots=5_000)
-    find_violation_thresholds(p_list=np.linspace(0.0, 0.01, 11), p2_scale=10.0, p_meas=0.01, shots=10_000)
+    # Optional 1D sweeps
+    #sweep_plot(p_list=[0.0, 0.001, 0.002, 0.003, 0.004, 0.005], p2_scale=10.0, p_meas=0.01, shots=5_000)
+    #find_violation_thresholds(p_list=np.linspace(0.0, 0.01, 11), p2_scale=10.0, p_meas=0.01, shots=10_000)
+
+    # NEW: sweep vs p2 (fixed p1)
+    #sweep_plot_p2(p2_list=np.linspace(0.0, 0.05, 11), p1=0.001, p_meas=0.01, shots=5_000)
+    #find_violation_thresholds_p2(p2_list=np.linspace(0.0, 0.05, 11), p1=0.001, p_meas=0.01, shots=10_000)
+
+    # NEW: 2D combined sweep over (p1, p2)
+    # NOTE: Larger ranges + finer grids increase runtime quadratically.
+    # Reduce shots or grid size if this becomes slow.
+    # Extended axis ranges to see where the violation fully disappears
+    sweep_grid_p1_p2(
+        p1_list=np.linspace(0.0, 0.03, 11),   # same range, fewer points (faster)
+        p2_list=np.linspace(0.0, 0.12, 11),   # same range, fewer points (faster)
+        p_meas=0.01,
+        shots=5_000,
+    )
