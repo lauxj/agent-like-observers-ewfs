@@ -11,15 +11,17 @@ def build_measurement(A_setting, B_setting, alpha, beta1, beta2):
     """
 
     # quantum registers
+
+    qr_SD = QuantumRegister(1, "S_D")
     qr_SC = QuantumRegister(1, "S_C")
-    qr_W0 = QuantumRegister(1, "W_0")
-    qr_W1 = QuantumRegister(1, "W_1")
     qr_M1 = QuantumRegister(1, "M1")
     qr_M2 = QuantumRegister(1, "M2")
-    qr_SD = QuantumRegister(1, "S_D")
+    qr_W0 = QuantumRegister(1, "W_0")
+    qr_W1 = QuantumRegister(1, "W_1")
+
     cr = ClassicalRegister(2, "c")         # store A and B outcomes
 
-    qc = QuantumCircuit(qr_SC, qr_W0, qr_W1, qr_M1, qr_M2, qr_SD, cr)
+    qc = QuantumCircuit( qr_SD, qr_SC, qr_M1, qr_M2, qr_W0, qr_W1, cr)
 
     # --- PRE-MEASUREMENT ---
     qc.h(qr_SC[0])                 # create |+> on S_C
