@@ -85,22 +85,40 @@ def plot_SB_circuits(build_fn, agent_name, alpha, beta1, beta2):
     for setting_name, A, B in settings:
         qc = build_fn(A, B, alpha, beta1, beta2)
         fig = qc.draw("mpl")
-        fig.set_size_inches(8, 4)
+        fig.set_size_inches(10, 4)
         fig.suptitle(f"{agent_name} (noiseless) – Circuit {setting_name}", fontsize=14)
 
+        plt.show()  #uncomment if you dont want to show the plots
         plt.close(fig)
 
 
-# --- Run noiseless S_SB for all agents ---
-alpha, beta1, beta2 = analytic_optimal_angles()
 
-agents = [
-    ("Reflex Agent", reflex_agent.build_measurement),
-    ("Guessing Agent", guessing_agent.build_measurement),
-    ("Betting Agent", betting_agent.build_measurement),
-]
+def main(shots: int = 10000, do_plots: bool = True):
+    """Run noiseless S_SB for all agents.
 
-for name, build_fn in agents:
-    S_val = S_SB(build_fn, alpha, beta1, beta2, shots=10000)
-    print(f"{name} (noiseless simulation): S_SB ≈ {S_val:.3f}")
-    plot_SB_circuits(build_fn, name, alpha, beta1, beta2)
+    Parameters
+    ----------
+    shots:
+        Number of shots for the AerSimulator.
+    do_plots:
+        If True, plot the four SB circuits per agent.
+    """
+    alpha, beta1, beta2 = analytic_optimal_angles()
+
+    agents = [
+        ("Reflex Agent", reflex_agent.build_measurement),
+        ("Guessing Agent", guessing_agent.build_measurement),
+        ("Betting Agent", betting_agent.build_measurement),
+    ]
+
+    for name, build_fn in agents:
+        S_val = S_SB(build_fn, alpha, beta1, beta2, shots=shots)
+        print(f"{name} (noiseless simulation): S_SB ≈ {S_val:.3f}")
+        if do_plots:
+            plot_SB_circuits(build_fn, name, alpha, beta1, beta2)
+
+
+if __name__ == "__main__":
+    # When run as a script, compute and print S_SB and (optionally) draw circuits.
+    # When imported, nothing runs automatically.
+    main(shots=10000, do_plots=True)

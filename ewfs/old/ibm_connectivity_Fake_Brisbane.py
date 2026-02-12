@@ -26,10 +26,7 @@ from qiskit_ibm_runtime.fake_provider import (
 
 
 FAKE_BACKENDS = {
-    "brisbane": FakeBrisbane,
-    "fez": FakeFez,
-    "kyoto": FakeKyoto,
-    "osaka": FakeOsaka,
+    "brisbane": FakeBrisbane
 }
 
 

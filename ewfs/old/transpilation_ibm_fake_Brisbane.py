@@ -14,7 +14,7 @@ import betting_agent
 import noiseless_simulation as noiseless
 
 # Offline IBM hardware snapshot (no IBM account needed)
-from qiskit_ibm_runtime import QiskitRuntimeService, SamplerV2 as Sampler
+from qiskit_ibm_runtime.fake_provider import FakeBrisbane
 
 # Silence a common Qiskit warning that does not affect correctness
 warnings.filterwarnings(
@@ -43,10 +43,6 @@ OPT_LEVEL = 0
 DO_TVD_CHECK = True
 TVD_SHOTS = 10_000
 
-# TVD checks are expensive (they run two ideal simulations per circuit).
-# Keep them on for offline debugging; usually turn them off for online backend sweeps.
-DO_TVD_CHECK_ONLINE = False
-
 # Building NoiseModel.from_backend(...) can be slow; cache one simulator per backend.
 CACHE_NOISE_MODEL = True
 
@@ -55,25 +51,11 @@ NOISE_SHOTS = 10_000
 # ==========================
 # Real hardware (IBM Quantum Platform)
 # ==========================
-# If True, use live backend calibrations to build a noise model for Aer.
-DO_REAL_BACKEND_NOISE_SIM = True
 
-# If True, actually submit jobs to a real QPU (costs Open Plan minutes / paid usage).
-DO_REAL_HARDWARE_RUN = False
-
- # Toggle which IBM QPUs to run on (keep entries here for later, set False to skip)
-REAL_BACKENDS = {
-    "ibm_torino": True,
-    "ibm_marrakesh": False,
-    "ibm_fez": False,
-}
-
-# Shots for real hardware runs
-HARDWARE_SHOTS = 1000
 
 # Plotting (can be heavy). Choose: "none", "show", or "save"
 PLOT_MODE = "none"
-PLOT_DIR = Path("plots")
+PLOT_DIR = Path("../plots")
 
 
 def _normalize_counts(counts: dict, shots: int) -> dict[str, float]:
@@ -101,23 +83,6 @@ def tvd_original_vs_transpiled(qc: QuantumCircuit, tqc: QuantumCircuit, shots: i
     return _tvd(p1, p2)
 
 
-# ==========================
-# IBM Quantum Platform helpers
-# ==========================
-def get_runtime_service():
-    """Connect to IBM Quantum Platform.
-
-    This assumes you have already saved your credentials locally.
-    See IBM Quantum docs: 'Save your access credentials'.
-    """
-    return QiskitRuntimeService()
-
-
-def get_real_backend(service: QiskitRuntimeService, backend_name: str):
-    """Get a real backend handle (live calibrations)."""
-    return service.backend(backend_name)
-
-
 def simulate_with_backend_noise(transpiled_by_setting: dict, backend, shots: int, sim: AerSimulator | None = None) -> float:
     """Compute S_SB using an Aer noise model derived from *this* backend's calibrations.
 
@@ -130,35 +95,6 @@ def simulate_with_backend_noise(transpiled_by_setting: dict, backend, shots: int
     E = {}
     for (A, B), tqc in transpiled_by_setting.items():
         counts = sim.run(tqc, shots=shots).result().get_counts()
-        _, _, EAB = noiseless.exp_values_from_counts(counts, shots)
-        E[(A, B)] = EAB
-
-    return -E[(1, 1)] + E[(1, 2)] - E[(2, 1)] - E[(2, 2)] - 2
-
-
-def run_on_hardware(transpiled_by_setting: dict, backend, shots: int) -> float:
-    """Run the transpiled circuits on a real IBM backend using SamplerV2.
-
-    Returns S_SB computed from the returned counts.
-    """
-    sampler = Sampler(mode=backend)
-
-    # Keep a deterministic order
-    pubs = [
-        (1, 1, transpiled_by_setting[(1, 1)]),
-        (1, 2, transpiled_by_setting[(1, 2)]),
-        (2, 1, transpiled_by_setting[(2, 1)]),
-        (2, 2, transpiled_by_setting[(2, 2)]),
-    ]
-
-    circuits = [qc for _, _, qc in pubs]
-    job = sampler.run(circuits, shots=shots)
-    results = job.result()
-
-    E = {}
-    for (A, B, _), pub_res in zip(pubs, results):
-        # SamplerV2 stores counts under the classical register name 'meas'
-        counts = pub_res.data.meas.get_counts()
         _, _, EAB = noiseless.exp_values_from_counts(counts, shots)
         E[(A, B)] = EAB
 
@@ -253,8 +189,7 @@ def transpile_agent_circuits(agent_name: str, build_fn, alpha: float, beta1: flo
         )
 
         # Optional TVD check (ideal simulator)
-        do_check = DO_TVD_CHECK if (DO_REAL_BACKEND_NOISE_SIM is False and DO_REAL_HARDWARE_RUN is False) else DO_TVD_CHECK_ONLINE
-        tvd = tvd_original_vs_transpiled(qc, tqc, shots=TVD_SHOTS) if do_check else None
+        tvd = tvd_original_vs_transpiled(qc, tqc, shots=TVD_SHOTS) if DO_TVD_CHECK else None
 
         ops = dict(tqc.count_ops())
         tvd_str = f"tvd={tvd:.4f}" if tvd is not None else "tvd=NA"
@@ -280,43 +215,31 @@ def transpile_agent_circuits(agent_name: str, build_fn, alpha: float, beta1: flo
 
 
 def run_all_agents(alpha: float, beta1: float, beta2: float):
+    # --------------------------
+    # 1) Offline: FakeBrisbane
+    # --------------------------
+    backend_fake = FakeBrisbane()
+
+    if DO_TVD_CHECK:
+        print("\nTVD = Total Variation Distance between output distributions")
+        print("      (original vs transpiled, ideal simulator). TVD ≈ 0 means they match.\n")
+
+    sim_fake = None
+    if CACHE_NOISE_MODEL:
+        sim_fake = AerSimulator(noise_model=NoiseModel.from_backend(backend_fake))
+
     agents = [
         ("Reflex Agent", reflex_agent.build_measurement),
         ("Guessing Agent", guessing_agent.build_measurement),
         ("Betting Agent", betting_agent.build_measurement),
     ]
 
-    # --------------------------
-    # IBM Quantum Platform backends
-    # --------------------------
-    if DO_REAL_BACKEND_NOISE_SIM or DO_REAL_HARDWARE_RUN:
-        print("\n=== IBM Quantum Platform backend ===")
-        service = get_runtime_service()
-        for backend_name, enabled in REAL_BACKENDS.items():
-            if not enabled:
-                continue
-            backend_real = get_real_backend(service, backend_name)
-            print(f"\nUsing backend: {backend_real.name}")
-
-            sim_real = None
-            if DO_REAL_BACKEND_NOISE_SIM and CACHE_NOISE_MODEL:
-                sim_real = AerSimulator(noise_model=NoiseModel.from_backend(backend_real))
-
-            if DO_REAL_BACKEND_NOISE_SIM:
-                print("--- Calibrated noise simulation (Aer NoiseModel from live calibrations) ---")
-                for agent_name, build_fn in agents:
-                    transpiled = transpile_agent_circuits(agent_name, build_fn, alpha, beta1, beta2, backend_real)
-                    S_val = simulate_with_backend_noise(transpiled, backend_real, shots=NOISE_SHOTS, sim=sim_real)
-                    verdict = "VIOLATION" if S_val > 0 else "no violation"
-                    print(f"  -> {agent_name}: S_SB ≈ {S_val:.3f} ({verdict})")
-
-            if DO_REAL_HARDWARE_RUN:
-                print("\n--- Real hardware run (SamplerV2) ---")
-                for agent_name, build_fn in agents:
-                    transpiled = transpile_agent_circuits(agent_name, build_fn, alpha, beta1, beta2, backend_real)
-                    S_val = run_on_hardware(transpiled, backend_real, shots=HARDWARE_SHOTS)
-                    verdict = "VIOLATION" if S_val > 0 else "no violation"
-                    print(f"  -> {agent_name}: S_SB ≈ {S_val:.3f} ({verdict})")
+    print("\n=== Offline noise simulation (FakeBrisbane) ===")
+    for agent_name, build_fn in agents:
+        transpiled = transpile_agent_circuits(agent_name, build_fn, alpha, beta1, beta2, backend_fake)
+        S_val = simulate_with_backend_noise(transpiled, backend_fake, shots=NOISE_SHOTS, sim=sim_fake)
+        verdict = "VIOLATION" if S_val > 0 else "no violation"
+        print(f"  -> {agent_name}: S_SB ≈ {S_val:.3f} ({verdict})")
 
 
 if __name__ == "__main__":
