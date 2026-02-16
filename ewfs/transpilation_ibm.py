@@ -33,7 +33,6 @@ TVD_SHOTS = 10_000
 DO_TVD_CHECK_ONLINE = False
 
 # Cache one simulator per backend:
-CACHE_NOISE_MODEL = True
 NOISE_SHOTS = 10_000
 
 # Simluation using real backend noise:
@@ -265,15 +264,11 @@ def run_all_agents(alpha: float, beta1: float, beta2: float):
             backend_real = get_real_backend(service, backend_name)
             print(f"\nUsing backend: {backend_real.name}")
 
-            sim_real = None
-            if DO_REAL_BACKEND_NOISE_SIM and CACHE_NOISE_MODEL:
-                sim_real = AerSimulator(noise_model=NoiseModel.from_backend(backend_real))
-
             if DO_REAL_BACKEND_NOISE_SIM:
                 print("--- Calibrated noise simulation (Aer NoiseModel from live calibrations) ---")
                 for agent_name, build_fn in AGENTS:
                     transpiled = transpile_agent_circuits(agent_name, build_fn, alpha, beta1, beta2, backend_real)
-                    S_val = simulate_with_backend_noise(transpiled, backend_real, shots=NOISE_SHOTS, sim=sim_real)
+                    S_val = simulate_with_backend_noise(transpiled, backend_real, shots=NOISE_SHOTS)
                     verdict = "VIOLATION" if S_val > 0 else "no violation"
                     print(f"  -> {agent_name}: S_SB ≈ {S_val:.3f} ({verdict})")
 
