@@ -1,20 +1,16 @@
 import warnings
 from pathlib import Path
-
-import numpy as np
+import json
+from datetime import datetime
 import matplotlib.pyplot as plt
-
 from qiskit import QuantumCircuit, transpile
 from qiskit_aer import AerSimulator
 from qiskit_aer.noise import NoiseModel
-
 import reflex_agent
 import guessing_agent
 import betting_agent
 import noiseless_simulation as noiseless
-
-# Offline IBM hardware snapshot (no IBM account needed)
-from qiskit_ibm_runtime import QiskitRuntimeService, SamplerV2 as Sampler
+from qiskit_ibm_runtime import QiskitRuntimeService, SamplerV2 as Sampler # Offline IBM hardware snapshot (no IBM account needed)
 
 # Silence a common Qiskit warning that does not affect correctness
 warnings.filterwarnings(
@@ -22,70 +18,66 @@ warnings.filterwarnings(
     message="Trying to add QuantumRegister to a QuantumCircuit having a layout",
 )
 
-# ==========================
-# Settings (edit these)
-# ==========================
-
-# Manual qubit placement: logical qubit i -> physical qubit MANUAL_LAYOUTS_BY_SIZE[n][i]
-# Use this to force the circuit into a good region of the device.
-# Set MANUAL_LAYOUTS_BY_SIZE = None to let Qiskit choose automatically.
+# Manual qubit placement
 MANUAL_LAYOUTS_BY_SIZE = {
-    4: [59, 60, 61, 62],           # Reflex Agent (4 qubits)
-    5: [62, 63, 64, 65, 54],       # Guessing Agent (5 qubits)
-    6: [54, 64, 65, 63, 66, 62],   # Betting Agent (6 qubits)
+    4: [28,29,30,31],
+    5: [29,30,31,32,18],
+    6: [54,61,62,60,63,59]
 }
-
-
 # Transpiler settings
 OPT_LEVEL = 0
 
 # Verification: compare original vs transpiled distributions (ideal simulator)
-DO_TVD_CHECK = True
+DO_TVD_CHECK = False
 TVD_SHOTS = 10_000
-
-# TVD checks are expensive (they run two ideal simulations per circuit).
-# Keep them on for offline debugging; usually turn them off for online backend sweeps.
 DO_TVD_CHECK_ONLINE = False
 
-# Building NoiseModel.from_backend(...) can be slow; cache one simulator per backend.
+# Cache one simulator per backend:
 CACHE_NOISE_MODEL = True
-
 NOISE_SHOTS = 10_000
 
-# ==========================
-# Real hardware (IBM Quantum Platform)
-# ==========================
-# If True, use live backend calibrations to build a noise model for Aer.
+# Simluation using real backend noise:
 DO_REAL_BACKEND_NOISE_SIM = True
 
-# If True, actually submit jobs to a real QPU (costs Open Plan minutes / paid usage).
+# Real hardware run:
 DO_REAL_HARDWARE_RUN = False
-
- # Toggle which IBM QPUs to run on (keep entries here for later, set False to skip)
-REAL_BACKENDS = {
-    "ibm_torino": True,
-    "ibm_marrakesh": False,
-    "ibm_fez": False,
-}
-
-# Shots for real hardware runs
 HARDWARE_SHOTS = 1000
 
-# Plotting (can be heavy). Choose: "none", "show", or "save"
+ # IBM QPU:
+REAL_BACKENDS = {
+    "ibm_torino": True
+}
+
+# SB settings:
+SETTINGS = [
+    ("A1B1", 1, 1),
+    ("A1B2", 1, 2),
+    ("A2B1", 2, 1),
+    ("A2B2", 2, 2),
+]
+
+# Agents:
+AGENTS = [
+    ("Reflex Agent", reflex_agent.build_measurement),
+    ("Guessing Agent", guessing_agent.build_measurement),
+    ("Betting Agent", betting_agent.build_measurement),
+]
+
+# Plotting: "none", "show", or "save"
 PLOT_MODE = "none"
 PLOT_DIR = Path("plots")
 
 
-def _normalize_counts(counts: dict, shots: int) -> dict[str, float]:
+def _normalize_counts(counts, shots):
     return {k: v / shots for k, v in counts.items()}
 
 
-def _tvd(p: dict[str, float], q: dict[str, float]) -> float:
+def _tvd(p, q):
     keys = set(p) | set(q)
     return 0.5 * sum(abs(p.get(k, 0.0) - q.get(k, 0.0)) for k in keys)
 
 
-def tvd_original_vs_transpiled(qc: QuantumCircuit, tqc: QuantumCircuit, shots: int) -> float:
+def tvd_original_vs_transpiled(qc, tqc, shots):
     """Total Variation Distance (TVD) between output distributions of qc and tqc.
 
     We run both circuits on an *ideal* (noise-free) simulator.
@@ -101,24 +93,17 @@ def tvd_original_vs_transpiled(qc: QuantumCircuit, tqc: QuantumCircuit, shots: i
     return _tvd(p1, p2)
 
 
-# ==========================
-# IBM Quantum Platform helpers
-# ==========================
+
+# IBM Quantum Platform:
 def get_runtime_service():
-    """Connect to IBM Quantum Platform.
-
-    This assumes you have already saved your credentials locally.
-    See IBM Quantum docs: 'Save your access credentials'.
-    """
+    """Connect to IBM Quantum Platform. Credentials (API) code must be saved locally."""
     return QiskitRuntimeService()
-
 
 def get_real_backend(service: QiskitRuntimeService, backend_name: str):
     """Get a real backend handle (live calibrations)."""
     return service.backend(backend_name)
 
-
-def simulate_with_backend_noise(transpiled_by_setting: dict, backend, shots: int, sim: AerSimulator | None = None) -> float:
+def simulate_with_backend_noise(transpiled_by_setting, backend, shots, sim=None):
     """Compute S_SB using an Aer noise model derived from *this* backend's calibrations.
 
     If `sim` is provided, it is reused (recommended for speed).
@@ -130,65 +115,40 @@ def simulate_with_backend_noise(transpiled_by_setting: dict, backend, shots: int
     E = {}
     for (A, B), tqc in transpiled_by_setting.items():
         counts = sim.run(tqc, shots=shots).result().get_counts()
-        _, _, EAB = noiseless.exp_values_from_counts(counts, shots)
+        EAB = noiseless.exp_values_from_counts(counts, shots)
         E[(A, B)] = EAB
 
     return -E[(1, 1)] + E[(1, 2)] - E[(2, 1)] - E[(2, 2)] - 2
-
-
-def run_on_hardware(transpiled_by_setting: dict, backend, shots: int) -> float:
-    """Run the transpiled circuits on a real IBM backend using SamplerV2.
-
-    Returns S_SB computed from the returned counts.
-    """
-    sampler = Sampler(mode=backend)
-
-    # Keep a deterministic order
-    pubs = [
-        (1, 1, transpiled_by_setting[(1, 1)]),
-        (1, 2, transpiled_by_setting[(1, 2)]),
-        (2, 1, transpiled_by_setting[(2, 1)]),
-        (2, 2, transpiled_by_setting[(2, 2)]),
-    ]
-
-    circuits = [qc for _, _, qc in pubs]
-    job = sampler.run(circuits, shots=shots)
-    results = job.result()
-
-    E = {}
-    for (A, B, _), pub_res in zip(pubs, results):
-        # SamplerV2 stores counts under the classical register name 'meas'
-        counts = pub_res.data.meas.get_counts()
-        _, _, EAB = noiseless.exp_values_from_counts(counts, shots)
-        E[(A, B)] = EAB
-
-    return -E[(1, 1)] + E[(1, 2)] - E[(2, 1)] - E[(2, 2)] - 2
-
 
 def get_initial_layout_for_circuit(qc: QuantumCircuit, backend, manual_layout=None):
-    """Return an initial_layout list or None.
+    """Return an initial_layout list.
 
-    manual_layout can be:
-      - None: auto layout
-      - list[int]: use this for ALL circuits (must match qc.num_qubits)
-      - dict[int, list[int]]: pick by qc.num_qubits
-
-    If a manual layout is not available for this circuit size, we fall back to auto layout.
+    STRICT mode: a manual layout MUST be provided and MUST be valid.
+    If anything is wrong (missing size, wrong length, invalid indices, duplicates),
+    we raise ValueError to abort the run instead of silently falling back to auto layout.
     """
     if manual_layout is None:
-        return None
+        raise ValueError(
+            "MANUAL_LAYOUTS_BY_SIZE is None, but strict manual layout is required. "
+            "Set MANUAL_LAYOUTS_BY_SIZE to a dict/list with valid physical qubit indices."
+        )
 
     # Dict-by-size mode
     if isinstance(manual_layout, dict):
         if qc.num_qubits not in manual_layout:
-            return None
+            raise ValueError(
+                f"No manual layout provided for circuit size n={qc.num_qubits}. "
+                f"Available sizes: {sorted(manual_layout.keys())}."
+            )
         layout = list(manual_layout[qc.num_qubits])
     else:
         # Single list mode
         layout = list(manual_layout)
 
     if len(layout) != qc.num_qubits:
-        return None
+        raise ValueError(
+            f"Manual layout length {len(layout)} does not match circuit num_qubits={qc.num_qubits}."
+        )
 
     bad = [q for q in layout if not (0 <= int(q) < backend.num_qubits)]
     if bad:
@@ -231,17 +191,11 @@ def transpile_agent_circuits(agent_name: str, build_fn, alpha: float, beta1: flo
 
     Returns: dict[(A,B)] -> transpiled circuit.
     """
-    settings = [
-        ("A1B1", 1, 1),
-        ("A1B2", 1, 2),
-        ("A2B1", 2, 1),
-        ("A2B2", 2, 2),
-    ]
 
     print(f"\nAgent: {agent_name}")
 
     out = {}
-    for label, A, B in settings:
+    for label, A, B in SETTINGS:
         qc = build_fn(A, B, alpha, beta1, beta2)
         initial_layout = get_initial_layout_for_circuit(qc, backend, MANUAL_LAYOUTS_BY_SIZE)
 
@@ -259,12 +213,10 @@ def transpile_agent_circuits(agent_name: str, build_fn, alpha: float, beta1: flo
         ops = dict(tqc.count_ops())
         tvd_str = f"tvd={tvd:.4f}" if tvd is not None else "tvd=NA"
 
-        cx_n = ops.get("cx", 0)
-        ecr_n = ops.get("ecr", 0)
         cz_n = ops.get("cz", 0)
-        twoq_n = cx_n + ecr_n + cz_n
+        twoq_n = cz_n
 
-        print(f"  {label}: {tvd_str}  depth={tqc.depth()}  2q={twoq_n}  (cx={cx_n}, ecr={ecr_n}, cz={cz_n})")
+        print(f"  {label}: {tvd_str}  depth={tqc.depth()}  2q={twoq_n}  (cz={cz_n})")
 
         # Optional plots
         plot_circuit(f"{agent_name} — Original {label}", qc, f"{agent_name.replace(' ', '_')}_{label}_original")
@@ -279,13 +231,28 @@ def transpile_agent_circuits(agent_name: str, build_fn, alpha: float, beta1: flo
     return out
 
 
-def run_all_agents(alpha: float, beta1: float, beta2: float):
-    agents = [
-        ("Reflex Agent", reflex_agent.build_measurement),
-        ("Guessing Agent", guessing_agent.build_measurement),
-        ("Betting Agent", betting_agent.build_measurement),
-    ]
+def get_counts_from_sampler_result(pub_res):
+    """Return a counts dict from a SamplerV2 result item.
 
+    This keeps the main hardware loop easy to read.
+    """
+    data = pub_res.data
+
+    # Pick the first classical register found.
+    if hasattr(data, "keys"):
+        reg_names = list(data.keys())
+        reg = reg_names[0]
+        datum = data[reg]
+    else:
+        # Fallback for attribute-style containers
+        reg_names = [k for k in data.__dict__.keys() if not k.startswith("_")]
+        reg = reg_names[0]
+        datum = getattr(data, reg)
+
+    return datum.get_counts()
+
+
+def run_all_agents(alpha: float, beta1: float, beta2: float):
     # --------------------------
     # IBM Quantum Platform backends
     # --------------------------
@@ -304,19 +271,127 @@ def run_all_agents(alpha: float, beta1: float, beta2: float):
 
             if DO_REAL_BACKEND_NOISE_SIM:
                 print("--- Calibrated noise simulation (Aer NoiseModel from live calibrations) ---")
-                for agent_name, build_fn in agents:
+                for agent_name, build_fn in AGENTS:
                     transpiled = transpile_agent_circuits(agent_name, build_fn, alpha, beta1, beta2, backend_real)
                     S_val = simulate_with_backend_noise(transpiled, backend_real, shots=NOISE_SHOTS, sim=sim_real)
                     verdict = "VIOLATION" if S_val > 0 else "no violation"
                     print(f"  -> {agent_name}: S_SB ≈ {S_val:.3f} ({verdict})")
 
             if DO_REAL_HARDWARE_RUN:
-                print("\n--- Real hardware run (SamplerV2) ---")
-                for agent_name, build_fn in agents:
-                    transpiled = transpile_agent_circuits(agent_name, build_fn, alpha, beta1, beta2, backend_real)
-                    S_val = run_on_hardware(transpiled, backend_real, shots=HARDWARE_SHOTS)
+                print("\n--- Real hardware run (SamplerV2, single job) ---")
+
+                sampler = Sampler(mode=backend_real)
+
+                # Collect ALL circuits across all agents
+                all_circuits = []
+                meta_info = []  # (agent_name, A, B)
+
+                for agent_name, build_fn in AGENTS:
+                    transpiled = transpile_agent_circuits(
+                        agent_name, build_fn, alpha, beta1, beta2, backend_real
+                    )
+
+                    for (A, B), tqc in transpiled.items():
+                        all_circuits.append(tqc)
+                        meta_info.append((agent_name, A, B))
+
+                # Submit ONE job with all 12 circuits
+                job = sampler.run(all_circuits, shots=HARDWARE_SHOTS)
+                results = job.result()
+
+                # Prepare result storage
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                results_dir = Path(f"hardware_results/{backend_real.name}_{timestamp}")
+                results_dir.mkdir(parents=True, exist_ok=True)
+
+                # Save basic job information (minimal reproducibility)
+                try:
+                    job_id = job.job_id()
+                except Exception:
+                    job_id = None
+
+                with open(results_dir / "job_info.json", "w") as f:
+                    json.dump(
+                        {
+                            "backend": backend_real.name,
+                            "job_id": job_id,
+                            "shots": HARDWARE_SHOTS,
+                            "timestamp": timestamp,
+                            # Calibration snapshot timestamp reported by the backend
+                            "calibration_last_update": getattr(getattr(backend_real, "properties", lambda: None)(), "last_update_date", None),
+                        },
+                        f,
+                        indent=2,
+                    )
+
+                # Save backend properties (calibrations, gate errors, T1, T2, etc.)
+                try:
+                    props = backend_real.properties()
+                    def _json_dump(path, data):
+                        with open(path, "w") as f:
+                            json.dump(data, f, indent=2)
+                    _json_dump(results_dir / "backend_properties.json", props.to_dict() if hasattr(props, "to_dict") else props)
+
+                    # Save backend configuration (connectivity, basis gates, etc.) for the same run
+                    try:
+                        cfg = backend_real.configuration()
+                        _json_dump(
+                            results_dir / "backend_configuration.json",
+                            cfg.to_dict() if hasattr(cfg, "to_dict") else cfg,
+                        )
+                    except Exception:
+                        pass
+
+                except Exception:
+                    pass
+
+                # Organize results per agent
+                agent_E = {}
+                agent_counts = {}
+
+                for (agent_name, A, B), pub_res in zip(meta_info, results):
+                    counts = get_counts_from_sampler_result(pub_res)
+
+                    # Save raw counts immediately
+                    fname = results_dir / f"{agent_name.replace(' ', '_')}_A{A}B{B}.json"
+                    with open(fname, "w") as f:
+                        json.dump(counts, f, indent=2)
+
+                    # Compute expectation value
+                    EAB = noiseless.exp_values_from_counts(counts, HARDWARE_SHOTS)
+
+                    if agent_name not in agent_E:
+                        agent_E[agent_name] = {}
+                        agent_counts[agent_name] = {}
+
+                    agent_E[agent_name][(A, B)] = EAB
+                    agent_counts[agent_name][(A, B)] = counts
+
+                # Save processed expectation values and S values
+                processed = {}
+                for agent_name in agent_E:
+                    E = agent_E[agent_name]
+                    S_val = -E[(1, 1)] + E[(1, 2)] - E[(2, 1)] - E[(2, 2)] - 2
+                    processed[agent_name] = {
+                        "E_A1B1": float(E[(1, 1)]),
+                        "E_A1B2": float(E[(1, 2)]),
+                        "E_A2B1": float(E[(2, 1)]),
+                        "E_A2B2": float(E[(2, 2)]),
+                        "S_SB": float(S_val),
+                        "shots": HARDWARE_SHOTS,
+                    }
+
+                with open(results_dir / "processed_results.json", "w") as f:
+                    json.dump(processed, f, indent=2)
+
+                # Compute S per agent
+                for agent_name in agent_E:
+                    E = agent_E[agent_name]
+                    S_val = -E[(1, 1)] + E[(1, 2)] - E[(2, 1)] - E[(2, 2)] - 2
                     verdict = "VIOLATION" if S_val > 0 else "no violation"
                     print(f"  -> {agent_name}: S_SB ≈ {S_val:.3f} ({verdict})")
+
+                print(f"\nRaw hardware data saved in: {results_dir.resolve()}")
 
 
 if __name__ == "__main__":
