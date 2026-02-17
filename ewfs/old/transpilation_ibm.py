@@ -64,7 +64,7 @@ AGENTS = [
 
 # Plotting: "none", "show", or "save"
 PLOT_MODE = "none"
-PLOT_DIR = Path("plots")
+PLOT_DIR = Path("../plots")
 
 
 def _normalize_counts(counts, shots):
