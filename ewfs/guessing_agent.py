@@ -4,9 +4,7 @@ from qiskit import QuantumCircuit, QuantumRegister, ClassicalRegister
 
 # Build circuit for guessing agent:
 def build_measurement(A_setting, B_setting, alpha, beta1, beta2):
-    """
-    Builds the circuit for the guessing agent for settings and angles given to the function
-    """
+    """Builds the circuit for the guessing agent for settings and angles given to the function"""
 
     # quantum registers
     qr_SC = QuantumRegister(1, "S_C")

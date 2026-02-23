@@ -3,10 +3,13 @@ import matplotlib.pyplot as plt
 from qiskit_aer import AerSimulator
 from pathlib import Path
 
-# Import agents:
+# Agent circuits
 import reflex_agent
 import guessing_agent
 import betting_agent
+
+# -----------------------------------------------------------------------------
+# SETTINGS:
 
 AGENTS = [
     ("Reflex Agent", reflex_agent.build_measurement),
@@ -25,36 +28,31 @@ SETTINGS = [
 # Simulator:
 sim = AerSimulator()
 
-# Directory for saved plots
+# Where to save plots:
 PLOT_DIR = Path("plots_noiseless")
 PLOT_DIR.mkdir(exist_ok=True)
 
 
-# Optimal angles:
+# Analytic angles:
 def analytic_optimal_angles():
-    """
-    Analytic angles for the Bell-plus implementation of the Semi-Brukner scenario.
-    """
+    """Return the analytic angles"""
     alpha = 3.0 * np.pi / 2.0
     beta1 = 3.0 * np.pi / 4.0
     beta2 = 1.0 * np.pi / 4.0
 
     return alpha, beta1, beta2
 
+# -----------------------------------------------------------------------------
 
 def exp_values_from_counts(counts, shots):
-    """
-    Compute the correlator E_AB from measurement outcome counts.
+    """Compute the correlator E_AB from a counts dictionary."""
+    # counts example: {'00': 1000, '01': 500, ...}
 
-    counts = {'00': 1000, '01': 500, ...}
-    shots = number of shots for the AerSimulator.
-    """
-
-    exp_AB = 0.0  # initialize
+    exp_AB = 0.0  # running sum
 
     for s, c in counts.items():
-        B = +1 if s[0] == '0' else -1   # map {0,1} to {+1, -1} for A
-        A = +1 if s[1] == '0' else -1   # map {0,1} to {+1, -1} for B
+        B = +1 if s[0] == '0' else -1   # bit -> ±1
+        A = +1 if s[1] == '0' else -1   # bit -> ±1
         p = c / shots
         exp_AB += p * A * B
 
@@ -62,13 +60,7 @@ def exp_values_from_counts(counts, shots):
 
 
 def expectation_AB(build_fn, A_setting, B_setting, alpha, beta1, beta2, shots):
-    """
-    Build circuit for given settings and run it.
-
-    `build_fn`: agent's build_measurement function.
-
-    Returns the correlator E_AB for the chosen settings.
-    """
+    """Run one setting and return the correlator E_AB"""
     qc = build_fn(A_setting, B_setting, alpha, beta1, beta2)
     result = sim.run(qc, shots=shots).result()
     counts = result.get_counts()
@@ -76,32 +68,27 @@ def expectation_AB(build_fn, A_setting, B_setting, alpha, beta1, beta2, shots):
 
 
 def S_SB(build_fn, alpha, beta1, beta2, shots):
-    """
-    Semi-Brukner S_SB for given angles alpha, beta1, beta2.
-    `build_fn` is the agent's build_measurement function.
-    """
-    # Correlators needed for SB in minimal scenario with one friend Charlie
+    """Compute S_SB from the four SB correlators"""
+    # Compute the four correlators.
     E = {}
     for label, A, B in SETTINGS:
         E[label] = expectation_AB(build_fn, A, B, alpha, beta1, beta2, shots)
 
-    # SB inequality for minimal scenario with one friend:
+    # Combine correlators into S_SB.
     S = -E["A1B1"] + E["A1B2"] - E["A2B1"] - E["A2B2"] - 2
     return S
 
 
 
 def plot_SB_circuits(build_fn, agent_name, alpha, beta1, beta2):
-    """
-    Plot the four circuits used in the Semi-Brukner inequality.
-    """
+    """Save the four SB circuits as plots"""
     for setting_name, A, B in SETTINGS:
         qc = build_fn(A, B, alpha, beta1, beta2)
         fig = qc.draw("mpl")
         fig.set_size_inches(10, 4)
         fig.suptitle(f"{agent_name} (noiseless) – Circuit {setting_name}", fontsize=14)
 
-        # Save figure
+        # Save image
         filename = f"{agent_name.replace(' ', '_')}_{setting_name}.png"
         fig.savefig(PLOT_DIR / filename, dpi=300, bbox_inches="tight")
         plt.close(fig)
@@ -109,9 +96,7 @@ def plot_SB_circuits(build_fn, agent_name, alpha, beta1, beta2):
 
 
 def main(shots):
-    """
-    Run noiseless S_SB for all agents.
-    """
+    """Run noiseless S_SB for all agents and save circuit plots"""
     alpha, beta1, beta2 = analytic_optimal_angles()
 
     for name, build_fn in AGENTS:
@@ -120,6 +105,8 @@ def main(shots):
         plot_SB_circuits(build_fn, name, alpha, beta1, beta2)
 
 
+# -----------------------------------------------------------------------------
+
 if __name__ == "__main__":
-    # Adjust if needed:
+    # Change shots if needed.
     main(shots=10000)

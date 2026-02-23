@@ -11,22 +11,24 @@ import betting_agent
 import noiseless_simulation as noiseless
 from qiskit_ibm_runtime import QiskitRuntimeService, SamplerV2 as Sampler # Offline IBM hardware snapshot (no IBM account needed)
 
-# Silence a common Qiskit warning that does not affect correctness
+# Silence a common Qiskit warning
 warnings.filterwarnings(
     "ignore",
     message="Trying to add QuantumRegister to a QuantumCircuit having a layout",
 )
 
-# Configuration:
+#-----------------------------------------------------------------------------------
+# CONFIGURATIONS:
 
-# Agents
+# Agents:
 AGENTS = [
     ("Reflex", reflex_agent.build_measurement),
     ("Guessing", guessing_agent.build_measurement),
     ("Betting", betting_agent.build_measurement),
 ]
 
-# Manual qubit placement (logical qubits -> physical qubits)
+# Manual qubit placement:
+# for this check IBM Quantum platform live calibration data
 MANUAL_LAYOUTS_BY_SIZE = {
     4: [28, 29, 30, 31], # Reflex Agent
     5: [29, 30, 31, 32, 18], # Guessing agent
@@ -58,11 +60,11 @@ SETTINGS = [
     ("A2B2", 2, 2),
 ]
 
-#---------------------------------------------------------------------------------
+#-----------------------------------------------------------------------------------
 
 
 def save_json(path: Path, obj):
-    """Small helper to save JSON files."""
+    """Small helper function to save JSON files."""
     with open(path, "w") as f:
         json.dump(obj, f, indent=2)
 
@@ -70,6 +72,21 @@ def save_json(path: Path, obj):
 def S_from_E(E):
     """Compute S_SB from correlators E[(A,B)]."""
     return -E[(1, 1)] + E[(1, 2)] - E[(2, 1)] - E[(2, 2)] - 2
+
+
+def S_error_from_E(E, shots_by_setting):
+    """Return 1-sigma statistical uncertainty for S_SB from finite-shot sampling."""
+    def n_for(setting):
+        if isinstance(shots_by_setting, dict):
+            return int(shots_by_setting[setting])
+        return int(shots_by_setting)
+
+    var = 0.0
+    for setting in [(1, 1), (1, 2), (2, 1), (2, 2)]:
+        n = n_for(setting)
+        e = float(E[setting])
+        var += (1.0 - e * e) / n
+    return var ** 0.5
 
 
 def simulate_with_backend_noise(transpiled_by_setting, backend, shots):
@@ -151,12 +168,15 @@ def run_noise_sim_for_backend(alpha, beta1, beta2, backend):
 
     for agent_name in transpiled_by_agent:
         S_val = simulate_with_backend_noise(transpiled_by_agent[agent_name], backend, shots=NOISE_SHOTS)
+        # Var(E) <= 1/N since E^2>=0 and Var(E)=(1-E^2)/N
+        # Therefore we get a bound of Var(S) <= 4/N since S sums over four E
+        S_err = (4.0 / NOISE_SHOTS) ** 0.5
         verdict = "VIOLATION" if S_val > 0 else "no violation"
-        print(f"  -> {agent_name}: S_SB ≈ {S_val:.3f} ({verdict})")
+        print(f"  -> {agent_name}: S_SB ≈ {S_val:.3f} ± {S_err:.3f} (1σ, shot noise) ({verdict})")
 
 
 def submit_hardware_job(transpiled_by_agent, backend):
-    """Submit one job containing all circuits across all agents."""
+    """Submit one job to IBM real hardware containing all circuits across all agents."""
     sampler = Sampler(mode=backend)
 
     all_circuits = []
@@ -173,7 +193,7 @@ def submit_hardware_job(transpiled_by_agent, backend):
 
 
 def save_hardware_results(job, results, meta_info, backend):
-    """Save counts and processed S_SB results for one backend run."""
+    """Save hardware result counts and processed S_SB results for one backend run."""
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     results_dir = Path(f"hardware_results/{backend.name}_{timestamp}")
     results_dir.mkdir(parents=True, exist_ok=True)
@@ -209,12 +229,14 @@ def save_hardware_results(job, results, meta_info, backend):
     processed = {}
     for agent_name, E in agent_E.items():
         S_val = S_from_E(E)
+        S_err = S_error_from_E(E, HARDWARE_SHOTS)
         processed[agent_name] = {
             "E_A1B1": float(E[(1, 1)]),
             "E_A1B2": float(E[(1, 2)]),
             "E_A2B1": float(E[(2, 1)]),
             "E_A2B2": float(E[(2, 2)]),
             "S_SB": float(S_val),
+            "S_SB_err_1sigma": float(S_err),
             "shots": HARDWARE_SHOTS,
         }
 
@@ -222,14 +244,15 @@ def save_hardware_results(job, results, meta_info, backend):
 
     for agent_name, E in agent_E.items():
         S_val = S_from_E(E)
+        S_err = S_error_from_E(E, HARDWARE_SHOTS)
         verdict = "VIOLATION" if S_val > 0 else "no violation"
-        print(f"  -> {agent_name}: S_SB ≈ {S_val:.3f} ({verdict})")
+        print(f"  -> {agent_name}: S_SB = {S_val:.3f} ± {S_err:.3f} (1σ) ({verdict})")
 
     print(f"\nSaved to: {results_dir.resolve()}")
 
 
 def run_hardware_for_backend(alpha, beta1, beta2, backend):
-    """Run one real-hardware SamplerV2 job for all agents on one backend."""
+    """Main function to run one real-hardware job for all agents on one backend."""
     print("\n--- Hardware run (SamplerV2) ---")
 
     transpiled_by_agent = transpile_all_agents(alpha, beta1, beta2, backend)
@@ -259,7 +282,7 @@ def run_all_agents(alpha, beta1, beta2):
             run_hardware_for_backend(alpha, beta1, beta2, backend_real)
 
 
-# IBM Quantum Platform:
+# For IBM Quantum Platform:
 def get_runtime_service():
     """Connect to IBM Quantum Platform. Credentials (API) code must be saved locally."""
     return QiskitRuntimeService()
@@ -267,6 +290,8 @@ def get_runtime_service():
 def get_real_backend(service: QiskitRuntimeService, backend_name: str):
     """Get a real backend handle (live calibrations)."""
     return service.backend(backend_name)
+
+#-----------------------------------------------------------------------------------------
 
 
 if __name__ == "__main__":
