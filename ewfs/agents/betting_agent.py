@@ -20,7 +20,7 @@ def build_measurement(A_setting, B_setting, alpha, beta1, beta2):
     # PRE-MEASUREMENT
     qc.h(qr_SC[0])                 # create |+> on S_C
     qc.cx(qr_SC[0], qr_SD[0])      # entangle → Bell pair
-    qc.x(qr_W0[0])                 # Initialize Wallet W0 = 1
+    qc.x(qr_W0[0])                  # Initialize Wallet W0 = 1
     qc.cx(qr_SC[0], qr_M1[0])      # Charlie pre-measures S_C (store in M1)
     qc.cx(qr_M1[0], qr_W0[0])      # Bet bookkeeping in Wallet
     qc.ry(np.pi/3, qr_SC[0])       # Rotation on SC

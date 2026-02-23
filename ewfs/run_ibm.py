@@ -2,20 +2,36 @@ import warnings
 from pathlib import Path
 import json
 from datetime import datetime
+import pickle
+
 from qiskit import transpile
 from qiskit_aer import AerSimulator
 from qiskit_aer.noise import NoiseModel
-import reflex_agent
-import guessing_agent
-import betting_agent
-import noiseless_simulation as noiseless
-from qiskit_ibm_runtime import QiskitRuntimeService, SamplerV2 as Sampler # Offline IBM hardware snapshot (no IBM account needed)
+from qiskit.visualization import circuit_drawer
+from ewfs.agents import guessing_agent, betting_agent, reflex_agent
+from ewfs import noiseless_simulation as noiseless
+from qiskit_ibm_runtime import QiskitRuntimeService, SamplerV2 as Sampler  # IBM Quantum Platform
 
 # Silence a common Qiskit warning
 warnings.filterwarnings(
     "ignore",
     message="Trying to add QuantumRegister to a QuantumCircuit having a layout",
 )
+
+# -----------------------------------------------------------------------------------
+# PATHS
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+
+# Plots: root/results/plots_ibm_transpilation
+PLOT_DIR = PROJECT_ROOT / "results" / "plots_ibm_transpilation"
+PLOT_DIR.mkdir(parents=True, exist_ok=True)
+
+# Data: root/data/data_fake_hardware and root/data/data_real_hardware
+DATA_DIR_FAKE = PROJECT_ROOT / "data" / "data_fake_hardware"
+DATA_DIR_FAKE.mkdir(parents=True, exist_ok=True)
+
+DATA_DIR_REAL = PROJECT_ROOT / "data" / "data_real_hardware"
+DATA_DIR_REAL.mkdir(parents=True, exist_ok=True)
 
 #-----------------------------------------------------------------------------------
 # CONFIGURATIONS:
@@ -38,8 +54,8 @@ MANUAL_LAYOUTS_BY_SIZE = {
 # Transpilation
 OPT_LEVEL = 0  # 0 leaves circuit the way it is
 
-# Run Simulation with real backend noise:
-DO_REAL_BACKEND_NOISE_SIM = True
+# Run Simulation with fake hardware noise (backend calibrations):
+DO_FAKE_HARDWARE_NOISE_SIM = True
 NOISE_SHOTS = 10_000
 
 # Run on  real hardware:
@@ -69,6 +85,11 @@ def save_json(path: Path, obj):
         json.dump(obj, f, indent=2)
 
 
+def counts_to_jsonable(counts):
+    """Convert Qiskit counts dict to a JSON-serializable dict."""
+    return {str(k): int(v) for k, v in counts.items()}
+
+
 def S_from_E(E):
     """Compute S_SB from correlators E[(A,B)]."""
     return -E[(1, 1)] + E[(1, 2)] - E[(2, 1)] - E[(2, 2)] - 2
@@ -90,17 +111,23 @@ def S_error_from_E(E, shots_by_setting):
 
 
 def simulate_with_backend_noise(transpiled_by_setting, backend, shots):
-    """Noise simulation using a backend-derived Aer NoiseModel."""
+    """Noise simulation using a backend-derived Aer NoiseModel.
+
+    Returns (S, E, counts_by_setting).
+    """
     noise_model = NoiseModel.from_backend(backend)
     sim = AerSimulator(noise_model=noise_model)
 
     E = {}
+    counts_by_setting = {}
     for (A, B), tqc in transpiled_by_setting.items():
         counts = sim.run(tqc, shots=shots).result().get_counts()
+        counts_by_setting[(A, B)] = counts_to_jsonable(counts)
         EAB = noiseless.exp_values_from_counts(counts, shots)
-        E[(A, B)] = EAB
+        E[(A, B)] = float(EAB)
 
-    return S_from_E(E)
+    S = float(S_from_E(E))
+    return S, E, counts_by_setting
 
 
 def transpile_agent_circuits(agent_name, build_fn, alpha, beta1, beta2, backend):
@@ -127,6 +154,18 @@ def transpile_agent_circuits(agent_name, build_fn, alpha, beta1, beta2, backend)
         cz_n = ops.get("cz", 0)
         # Print information about the transpiled circuit
         print(f"  {label}: depth={tqc.depth()}  cz={cz_n}")
+
+        # Save transpiled circuit plot
+        agent_dir = PLOT_DIR / "transpiled" / agent_name.replace(" ", "_")
+        agent_dir.mkdir(parents=True, exist_ok=True)
+        plot_path = agent_dir / f"{label}_depth{tqc.depth()}_cz{cz_n}.png"
+        try:
+            circuit_drawer(tqc, output="mpl", filename=str(plot_path))
+        except Exception:
+            # Fallback: try text drawer if mpl backend is unavailable
+            plot_path_txt = agent_dir / f"{label}_depth{tqc.depth()}_cz{cz_n}.txt"
+            with open(plot_path_txt, "w", encoding="utf-8") as f:
+                f.write(str(tqc.draw(output="text")))
 
         out[(A, B)] = tqc
 
@@ -162,17 +201,40 @@ def transpile_all_agents(alpha, beta1, beta2, backend):
 
 
 def run_noise_sim_for_backend(alpha, beta1, beta2, backend):
-    """Run calibrated-noise simulations for all agents on one backend."""
+    """Run calibrated-noise simulations for all agents on one backend and save raw data."""
     print("--- Noise sim (backend calibrations) ---")
     transpiled_by_agent = transpile_all_agents(alpha, beta1, beta2, backend)
 
+    run_data = {
+        "kind": "fake_hardware_noise_sim",
+        "timestamp": datetime.now().strftime("%Y%m%d_%H%M%S"),
+        "backend": backend.name,
+        "shots": int(NOISE_SHOTS),
+        "angles": {"alpha": float(alpha), "beta1": float(beta1), "beta2": float(beta2)},
+        "agents": {},
+    }
+
     for agent_name in transpiled_by_agent:
-        S_val = simulate_with_backend_noise(transpiled_by_agent[agent_name], backend, shots=NOISE_SHOTS)
-        # Var(E) <= 1/N since E^2>=0 and Var(E)=(1-E^2)/N
-        # Therefore we get a bound of Var(S) <= 4/N since S sums over four E
+        S_val, E, counts_by_setting = simulate_with_backend_noise(
+            transpiled_by_agent[agent_name], backend, shots=NOISE_SHOTS
+        )
+        # Shot-noise-only 1σ bound used previously
         S_err = (4.0 / NOISE_SHOTS) ** 0.5
         verdict = "VIOLATION" if S_val > 0 else "no violation"
         print(f"  -> {agent_name}: S_SB ≈ {S_val:.3f} ± {S_err:.3f} (1σ, shot noise) ({verdict})")
+
+        # Store compact raw artifact
+        run_data["agents"][agent_name] = {
+            "E": {f"A{A}B{B}": float(E[(A, B)]) for (A, B) in E},
+            "counts": {f"A{A}B{B}": counts_by_setting[(A, B)] for (A, B) in counts_by_setting},
+            "S_SB": float(S_val),
+            "S_SB_err_1sigma_shotnoise": float(S_err),
+        }
+
+    out_dir = DATA_DIR_FAKE / f"{backend.name}_{run_data['timestamp']}"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    save_json(out_dir / "fake_hardware_noise_sim.json", run_data)
+    print(f"Saved fake-hardware noise-sim data to: {out_dir.resolve()}")
 
 
 def submit_hardware_job(transpiled_by_agent, backend):
@@ -195,7 +257,7 @@ def submit_hardware_job(transpiled_by_agent, backend):
 def save_hardware_results(job, results, meta_info, backend):
     """Save hardware result counts and processed S_SB results for one backend run."""
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    results_dir = Path(f"hardware_results/{backend.name}_{timestamp}")
+    results_dir = DATA_DIR_REAL / f"{backend.name}_{timestamp}"
     results_dir.mkdir(parents=True, exist_ok=True)
 
     try:
@@ -214,13 +276,13 @@ def save_hardware_results(job, results, meta_info, backend):
     )
 
     agent_E = {}
+    raw_counts_all = {}
 
     for (agent_name, A, B), pub_res in zip(meta_info, results):
         counts = get_counts_from_sampler_result(pub_res)
 
-        # Save raw counts
-        fname = results_dir / f"{agent_name.replace(' ', '_')}_A{A}B{B}.json"
-        save_json(fname, counts)
+        # Store compact raw counts in memory
+        raw_counts_all.setdefault(agent_name, {})[f"A{A}B{B}"] = counts_to_jsonable(counts)
 
         # Expectation value
         EAB = noiseless.exp_values_from_counts(counts, HARDWARE_SHOTS)
@@ -242,6 +304,13 @@ def save_hardware_results(job, results, meta_info, backend):
 
     save_json(results_dir / "processed_results.json", processed)
 
+    # Save compact raw counts (all agents/settings in one file)
+    save_json(results_dir / "raw_counts.json", raw_counts_all)
+
+    # Save full raw Sampler result object (pickle)
+    with open(results_dir / "raw_sampler_result.pkl", "wb") as f:
+        pickle.dump(results, f)
+
     for agent_name, E in agent_E.items():
         S_val = S_from_E(E)
         S_err = S_error_from_E(E, HARDWARE_SHOTS)
@@ -262,7 +331,7 @@ def run_hardware_for_backend(alpha, beta1, beta2, backend):
 
 def run_all_agents(alpha, beta1, beta2):
     """Main function to run all specified agents on the specified hardware (Simulation or Hardware)."""
-    if not (DO_REAL_BACKEND_NOISE_SIM or DO_REAL_HARDWARE_RUN):
+    if not (DO_FAKE_HARDWARE_NOISE_SIM or DO_REAL_HARDWARE_RUN):
         return
 
     print("\n=== IBM Quantum Platform backend ===")
@@ -275,7 +344,7 @@ def run_all_agents(alpha, beta1, beta2):
         backend_real = get_real_backend(service, backend_name)
         print(f"\nUsing backend: {backend_real.name}")
 
-        if DO_REAL_BACKEND_NOISE_SIM:
+        if DO_FAKE_HARDWARE_NOISE_SIM:
             run_noise_sim_for_backend(alpha, beta1, beta2, backend_real)
 
         if DO_REAL_HARDWARE_RUN:

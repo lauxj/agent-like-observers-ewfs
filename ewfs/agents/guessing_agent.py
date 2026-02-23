@@ -19,7 +19,7 @@ def build_measurement(A_setting, B_setting, alpha, beta1, beta2):
     # PRE-MEASUREMENT
     qc.h(qr_SC[0])                 # create |+> on S_C
     qc.cx(qr_SC[0], qr_SD[0])      # entangle → Bell pair
-    qc.cx(qr_SC[0], qr_M1[0])      # Charlie pre-measures S_C
+    qc.cx(qr_SC[0], qr_M1[0])       # Charlie pre-measures S_C
     qc.cx(qr_M1[0], qr_GC[0])      # Guess
     qc.ry(np.pi/3, qr_SC[0])       # Rotation on SC
     qc.cx(qr_SC[0], qr_M2[0])      # Charlie measures SC again after rotation

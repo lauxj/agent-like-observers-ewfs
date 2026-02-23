@@ -17,7 +17,7 @@ def build_measurement(A_setting, B_setting, alpha, beta1, beta2):
     # PRE-MEASUREMENT
     qc.h(qr_SC[0])                 # create |+> on S_C
     qc.cx(qr_SC[0], qr_SD[0])      # entangle → Bell pair
-    qc.cx(qr_SC[0], qr_FC[0])      # Charlie pre-measures S_C
+    qc.cx(qr_SC[0], qr_FC[0])       # Charlie pre-measures S_C
     qc.cx(qr_FC[0], qr_LC[0])      # turn light switch on
 
 
