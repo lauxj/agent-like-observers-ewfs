@@ -12,6 +12,8 @@ from ewfs.agents import guessing_agent, betting_agent, reflex_agent
 from ewfs import noiseless_simulation as noiseless
 from qiskit_ibm_runtime import QiskitRuntimeService, SamplerV2 as Sampler  # IBM Quantum Platform
 
+import matplotlib.pyplot as plt
+
 # Silence a common Qiskit warning
 warnings.filterwarnings(
     "ignore",
@@ -156,16 +158,14 @@ def transpile_agent_circuits(agent_name, build_fn, alpha, beta1, beta2, backend)
         print(f"  {label}: depth={tqc.depth()}  cz={cz_n}")
 
         # Save transpiled circuit plot
+        tqc.name = f"{agent_name} – {label}"
         agent_dir = PLOT_DIR / "transpiled" / agent_name.replace(" ", "_")
         agent_dir.mkdir(parents=True, exist_ok=True)
         plot_path = agent_dir / f"{label}_depth{tqc.depth()}_cz{cz_n}.png"
-        try:
-            circuit_drawer(tqc, output="mpl", filename=str(plot_path))
-        except Exception:
-            # Fallback: try text drawer if mpl backend is unavailable
-            plot_path_txt = agent_dir / f"{label}_depth{tqc.depth()}_cz{cz_n}.txt"
-            with open(plot_path_txt, "w", encoding="utf-8") as f:
-                f.write(str(tqc.draw(output="text")))
+        fig = circuit_drawer(tqc, output="mpl")
+        fig.suptitle(f"{agent_name}: {label} (transpiled)", fontsize=14)
+        fig.savefig(plot_path, dpi=300, bbox_inches="tight")
+        plt.close(fig)
 
         out[(A, B)] = tqc
 

@@ -116,7 +116,7 @@ def plot_SB_circuits(build_fn, agent_name, alpha, beta1, beta2):
 
 
 
-def main(shots):
+def run_noiseless_simulation(shots=10000, save=True, make_plots=True):
     """Run noiseless S_SB for all agents, save circuit plots, and persist raw data."""
     alpha, beta1, beta2 = analytic_optimal_angles()
 
@@ -143,19 +143,22 @@ def main(shots):
             "counts": counts_by_setting,
         }
 
-        plot_SB_circuits(build_fn, name, alpha, beta1, beta2)
+        if make_plots:
+            plot_SB_circuits(build_fn, name, alpha, beta1, beta2)
 
-    # Save a compact JSON artifact for thesis reproducibility.
-    ts_safe = run_data["timestamp"].replace(":", "-")
-    out_path = DATA_DIR / f"noiseless_run_{ts_safe}_shots{shots}.json"
-    with open(out_path, "w", encoding="utf-8") as f:
-        json.dump(run_data, f, indent=2, sort_keys=True)
+    if save:
+        ts_safe = run_data["timestamp"].replace(":", "-")
+        out_path = DATA_DIR / f"noiseless_run_{ts_safe}_shots{shots}.json"
+        with open(out_path, "w", encoding="utf-8") as f:
+            json.dump(run_data, f, indent=2, sort_keys=True)
 
-    print(f"Saved noiseless run data to: {out_path}")
+        print(f"Saved noiseless run data to: {out_path}")
+
+    return run_data
 
 
 # -----------------------------------------------------------------------------
 
 if __name__ == "__main__":
     # Change shots if needed.
-    main(shots=10000)
+    run_noiseless_simulation(shots=10000, save=True, make_plots=True)
