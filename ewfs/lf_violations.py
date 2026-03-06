@@ -67,26 +67,13 @@ if __name__ == "__main__":
     print()
     #fake_hardware test
     print("fake hardware simulation:")
-    path = root / "data/data_fake_hardware/ibm_torino_20260305_155645/fake_hardware_noise_sim.json"
+    path = root / "data/data_fake_hardware/ibm_torino_20260306_155454/fake_hardware_noise_sim.json"
     for agent in ["Betting Agent", "Guessing Agent", "Reflex Agent"]:
         print(agent,"S =", LF_violation(str(path), agent=agent))
 
     # real hardware
-    path3 = root / "data/data_real_hardware/ibm_torino_20260305_144515/real_hardware_run.json"
+    path3 = root / "data/data_real_hardware/ibm_torino_20260306_155642/processed_results.json"
     print("\nReal hardware:")
     for agent in ["Betting Agent", "Guessing Agent", "Reflex Agent"]:
         print(agent, "S =", LF_violation(str(path3), agent=agent))
 
-     #----------------
-    print()
-    #fake_hardware test
-    print("fake hardware simulation:")
-    path = root / "data/data_fake_hardware/ibm_torino_20260305_155811/fake_hardware_noise_sim.json"
-    for agent in ["Betting Agent", "Guessing Agent", "Reflex Agent"]:
-        print(agent,"S =", LF_violation(str(path), agent=agent))
-
-    # real hardware
-    path3 = root / "data/data_real_hardware/ibm_torino_20260305_144642/real_hardware_run.json"
-    print("\nReal hardware:")
-    for agent in ["Betting Agent", "Guessing Agent", "Reflex Agent"]:
-        print(agent, "S =", LF_violation(str(path3), agent=agent))

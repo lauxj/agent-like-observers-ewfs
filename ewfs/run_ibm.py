@@ -42,19 +42,26 @@ DATA_DIR_REAL.mkdir(parents=True, exist_ok=True)
 #    ("Betting", build_circuit_betting)
 #]
 AGENTS = [
-    ("Reflex", build_circuit_reflex),
-    ("Guessing", build_circuit_guessing),
-    ("Betting", build_circuit_betting),
+    ("Reflex Agent", build_circuit_reflex),
+    ("Guessing Agent", build_circuit_guessing),
+    ("Betting Agent", build_circuit_betting),
 ]
 
 
 # Manual qubit placement:
 # for this check IBM Quantum platform live calibration data
+#MANUAL_LAYOUTS_BY_SIZE = {
+#    7: [28, 29, 30, 31, 32, 33, 34],
+#    8: [28, 29, 30, 31, 32, 33, 34, 35],
+#    9: [54,61,60,59,62,58,63,14,129],
+#}
+
 MANUAL_LAYOUTS_BY_SIZE = {
-    7: [28, 29, 30, 31, 32, 33, 34],
-    8: [28, 29, 30, 31, 32, 33, 34, 35],
-    9: [54,61,60,59,62,58,63,14,129],
+    6: [28, 29, 30, 31, 14,129], # Reflex Agent
+    7: [29, 30, 31, 32, 18,14,129], # Guessing agent
+    8: [54, 61, 62, 60, 63, 59,14,129], # Betting Agent
 }
+
 
 # Transpilation
 OPT_LEVEL = 0  # 0 leaves circuit the way it is
@@ -64,8 +71,8 @@ DO_FAKE_HARDWARE_NOISE_SIM = True
 NOISE_SHOTS = 1000
 
 # Run on  real hardware:
-DO_REAL_HARDWARE_RUN = False
-HARDWARE_SHOTS = 100
+DO_REAL_HARDWARE_RUN = True
+HARDWARE_SHOTS = 300
 
 
 # Backends to use
