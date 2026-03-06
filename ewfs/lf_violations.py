@@ -14,22 +14,32 @@ def load(path, agent="Betting"):
 
 
 def E(counts, A, B):
-    # A in {1,2} selects c0: A=1 -> c0=0, A=2 -> c0=1
-    # B in {1,2} selects c1: B=1 -> c1=0, B=2 -> c1=1
-    choice_c0 = "0" if A == 1 else "1"
-    choice_c1 = "0" if B == 1 else "1"
+    # A in {1,2}: choose A1 (c2) or A2 (c3)
+    # B in {1,2}: choose B1 (c1=0) or B2 (c1=1)
+
+    choice_c0 = "0" if A == 1 else "1"  # A_choice
+    choice_c1 = "0" if B == 1 else "1"  # B_choice
 
     num = 0
     den = 0
+
     for s, n in counts.items():
-        if len(s) != 4:
-            raise ValueError(f"Expected 4-bit key, got {s!r}")
-        c3, c2, c1, c0 = s[0], s[1], s[2], s[3]  # (SD, Arec, B_choice, A_choice)
+        if len(s) < 5:
+            raise ValueError(f"Expected ≥5-bit key, got {s!r}")
+
+        c4, c3, c2, c1, c0 = s[0], s[1], s[2], s[3], s[4]
+
         if c1 == choice_c1 and c0 == choice_c0:
             den += n
-            num += n * pm(c2) * pm(c3)
+
+            A_bit = c2 if A == 1 else c3
+            B_bit = c4
+
+            num += n * pm(A_bit) * pm(B_bit)
+
     if den == 0:
         raise ValueError(f"No events with c1={choice_c1} and c0={choice_c0}")
+
     return num / den
 
 
@@ -47,13 +57,36 @@ def LF_violation(path, agent="Betting"):
 
 if __name__ == "__main__":
 
-    #fake_hardware
     root = Path(__file__).resolve().parents[1]  # project root (one level above ewfs/)
-    path = root / "data/data_fake_hardware/ibm_torino_20260304_153630/fake_hardware_noise_sim.json"
-    print("S =", LF_violation(str(path), agent="Betting"))
-
     # Noiseless simulation test
-    path2 = root / "data/data_noiseless_simulation/noiseless_run_2026-03-04T15-32-08_shots1000000.json"
+    path2 = root / "data/data_noiseless_simulation/noiseless_run_2026-03-06T10-41-11_shots10000.json"
     print("\nNoiseless simulation:")
     for agent in ["Betting Agent", "Guessing Agent", "Reflex Agent"]:
         print(agent, "S =", LF_violation(str(path2), agent=agent))
+
+    print()
+    #fake_hardware test
+    print("fake hardware simulation:")
+    path = root / "data/data_fake_hardware/ibm_torino_20260305_155645/fake_hardware_noise_sim.json"
+    for agent in ["Betting Agent", "Guessing Agent", "Reflex Agent"]:
+        print(agent,"S =", LF_violation(str(path), agent=agent))
+
+    # real hardware
+    path3 = root / "data/data_real_hardware/ibm_torino_20260305_144515/real_hardware_run.json"
+    print("\nReal hardware:")
+    for agent in ["Betting Agent", "Guessing Agent", "Reflex Agent"]:
+        print(agent, "S =", LF_violation(str(path3), agent=agent))
+
+     #----------------
+    print()
+    #fake_hardware test
+    print("fake hardware simulation:")
+    path = root / "data/data_fake_hardware/ibm_torino_20260305_155811/fake_hardware_noise_sim.json"
+    for agent in ["Betting Agent", "Guessing Agent", "Reflex Agent"]:
+        print(agent,"S =", LF_violation(str(path), agent=agent))
+
+    # real hardware
+    path3 = root / "data/data_real_hardware/ibm_torino_20260305_144642/real_hardware_run.json"
+    print("\nReal hardware:")
+    for agent in ["Betting Agent", "Guessing Agent", "Reflex Agent"]:
+        print(agent, "S =", LF_violation(str(path3), agent=agent))

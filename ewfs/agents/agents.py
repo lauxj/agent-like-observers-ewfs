@@ -16,7 +16,6 @@ def build_circuit_betting() -> QuantumCircuit:
     # Quantum registers
     qr_SD = QuantumRegister(1, "SD")
     qr_SC = QuantumRegister(1, "SC")
-    qr_AREG = QuantumRegister(1, "Arec")
     qr_M1 = QuantumRegister(1, "M1")
     qr_M2 = QuantumRegister(1, "M2")
     qr_W0 = QuantumRegister(1, "W0")
@@ -25,7 +24,7 @@ def build_circuit_betting() -> QuantumCircuit:
     qr_B_choice = QuantumRegister(1, "Bchoice")
 
     # Classical register (joint counts)
-    c = ClassicalRegister(4, "c") # A_choice, B_choice, A_record (Arec), B_meas
+    c = ClassicalRegister(5, "c") # A_choice, B_choice, A_record (Arec), B_meas
 
     #cA = ClassicalRegister(1, "cA")
     #cB = ClassicalRegister(1, "cB")
@@ -34,7 +33,7 @@ def build_circuit_betting() -> QuantumCircuit:
     #cBr = ClassicalRegister(1, "cBr")
 
     qc = QuantumCircuit(
-        qr_SD, qr_SC, qr_AREG, qr_M1, qr_M2, qr_W0, qr_W1, qr_A_choice, qr_B_choice,
+        qr_SD, qr_SC, qr_M1, qr_M2, qr_W0, qr_W1, qr_A_choice, qr_B_choice,
         c,
         name="betting_agent",
     )
@@ -63,12 +62,9 @@ def build_circuit_betting() -> QuantumCircuit:
 
     qc.cx(qr_M1[0], qr_W0[0])
 
-    qc.measure(qr_SD[0], c[3])
+    qc.measure(qr_SD[0], c[4])
 
     qc.cx(qr_SC[0], qr_M2[0])
-
-    with qc.if_test((c[0], 0)):
-        qc.cx(qr_M1[0], qr_AREG[0])
 
     qc.cx(qr_M2[0], qr_W1[0])
 
@@ -80,9 +76,9 @@ def build_circuit_betting() -> QuantumCircuit:
         qc.cx(qr_SC[0], qr_M1[0])
         qc.x(qr_W0[0])
         qc.ry(alpha, qr_SC[0])
-        qc.cx(qr_SC[0], qr_AREG[0])
 
-    qc.measure(qr_AREG[0], c[2])
+    qc.measure(qr_M1[0], c[2])
+    qc.measure(qr_SC[0], c[3])
 
     return qc
 
@@ -92,17 +88,16 @@ def build_circuit_guessing() -> QuantumCircuit:
 
     qr_SD = QuantumRegister(1, "SD")
     qr_SC = QuantumRegister(1, "SC")
-    qr_AREG = QuantumRegister(1, "Arec")
     qr_M1 = QuantumRegister(1, "M1")
     qr_M2 = QuantumRegister(1, "M2")
     qr_G = QuantumRegister(1, "G")
     qr_A_choice = QuantumRegister(1, "Achoice")
     qr_B_choice = QuantumRegister(1, "Bchoice")
 
-    c = ClassicalRegister(4, "c")
+    c = ClassicalRegister(5, "c")
 
     qc = QuantumCircuit(
-        qr_SD, qr_SC, qr_AREG, qr_M1, qr_M2, qr_G, qr_A_choice, qr_B_choice,
+        qr_SD, qr_SC, qr_M1, qr_M2, qr_G, qr_A_choice, qr_B_choice,
         c,
         name="guessing_agent",
     )
@@ -131,10 +126,7 @@ def build_circuit_guessing() -> QuantumCircuit:
 
     qc.cx(qr_SC[0], qr_M2[0])
 
-    with qc.if_test((c[0], 0)):
-        qc.cx(qr_M1[0], qr_AREG[0])
-
-    qc.measure(qr_SD[0], c[3])
+    qc.measure(qr_SD[0], c[4])
 
     qc.cx(qr_M2[0], qr_G[0])
 
@@ -146,9 +138,8 @@ def build_circuit_guessing() -> QuantumCircuit:
         qc.cx(qr_SC[0], qr_M1[0])
         qc.ry(alpha, qr_SC[0])
 
-        qc.cx(qr_SC[0], qr_AREG[0])
-
-    qc.measure(qr_AREG[0], c[2])
+    qc.measure(qr_M1[0], c[2])
+    qc.measure(qr_SC[0], c[3])
 
     return qc
 
@@ -158,16 +149,15 @@ def build_circuit_reflex() -> QuantumCircuit:
 
     qr_SD = QuantumRegister(1, "SD")
     qr_SC = QuantumRegister(1, "SC")
-    qr_AREG = QuantumRegister(1, "Arec")
     qr_M = QuantumRegister(1, "M")
     qr_L = QuantumRegister(1, "L")
     qr_A_choice = QuantumRegister(1, "Achoice")
     qr_B_choice = QuantumRegister(1, "Bchoice")
 
-    c = ClassicalRegister(4, "c")
+    c = ClassicalRegister(5, "c")
 
     qc = QuantumCircuit(
-        qr_SD, qr_SC, qr_AREG, qr_M, qr_L, qr_A_choice, qr_B_choice,
+        qr_SD, qr_SC, qr_M, qr_L, qr_A_choice, qr_B_choice,
         c,
         name="reflex_agent",
     )
@@ -192,17 +182,14 @@ def build_circuit_reflex() -> QuantumCircuit:
 
     qc.cx(qr_M[0], qr_L[0])
 
-    with qc.if_test((c[0], 0)):
-        qc.cx(qr_M[0], qr_AREG[0])
-
-    qc.measure(qr_SD[0], c[3])
+    qc.measure(qr_SD[0], c[4])
 
     with qc.if_test((c[0], 1)):
         qc.cx(qr_M[0], qr_L[0])
         qc.cx(qr_SC[0], qr_M[0])
         qc.ry(alpha, qr_SC[0])
-        qc.cx(qr_SC[0], qr_AREG[0])
 
-    qc.measure(qr_AREG[0], c[2])
+    qc.measure(qr_M[0], c[2])
+    qc.measure(qr_SC[0], c[3])
 
     return qc
