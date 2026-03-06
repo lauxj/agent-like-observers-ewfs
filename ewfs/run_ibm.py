@@ -38,14 +38,14 @@ DATA_DIR_REAL.mkdir(parents=True, exist_ok=True)
 # CONFIGURATIONS:
 
 # Agents:
-AGENTS = [
-    ("Betting", build_circuit_betting)
-]
 #AGENTS = [
-#    ("Reflex", build_circuit_reflex),
-#    ("Guessing", build_circuit_guessing),
-#    ("Betting", build_circuit_betting),
+#    ("Betting", build_circuit_betting)
 #]
+AGENTS = [
+    ("Reflex", build_circuit_reflex),
+    ("Guessing", build_circuit_guessing),
+    ("Betting", build_circuit_betting),
+]
 
 
 # Manual qubit placement:
