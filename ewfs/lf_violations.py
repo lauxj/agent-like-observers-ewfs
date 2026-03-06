@@ -47,13 +47,36 @@ def LF_violation(path, agent="Betting"):
 
 if __name__ == "__main__":
 
-    #fake_hardware
     root = Path(__file__).resolve().parents[1]  # project root (one level above ewfs/)
-    path = root / "data/data_fake_hardware/ibm_torino_20260304_153630/fake_hardware_noise_sim.json"
-    print("S =", LF_violation(str(path), agent="Betting"))
-
     # Noiseless simulation test
-    path2 = root / "data/data_noiseless_simulation/noiseless_run_2026-03-04T15-32-08_shots1000000.json"
+    path2 = root / "data/data_noiseless_simulation/noiseless_run_2026-03-06T11-09-20_shots10000.json"
     print("\nNoiseless simulation:")
     for agent in ["Betting Agent", "Guessing Agent", "Reflex Agent"]:
         print(agent, "S =", LF_violation(str(path2), agent=agent))
+
+    print()
+    #fake_hardware test
+    print("fake hardware simulation:")
+    path = root / "data/data_fake_hardware/ibm_torino_20260305_155645/fake_hardware_noise_sim.json"
+    for agent in ["Betting Agent", "Guessing Agent", "Reflex Agent"]:
+        print(agent,"S =", LF_violation(str(path), agent=agent))
+
+    # real hardware
+    path3 = root / "data/data_real_hardware/ibm_torino_20260305_144515/real_hardware_run.json"
+    print("\nReal hardware:")
+    for agent in ["Betting Agent", "Guessing Agent", "Reflex Agent"]:
+        print(agent, "S =", LF_violation(str(path3), agent=agent))
+
+     #----------------
+    print()
+    #fake_hardware test
+    print("fake hardware simulation:")
+    path = root / "data/data_fake_hardware/ibm_torino_20260305_155811/fake_hardware_noise_sim.json"
+    for agent in ["Betting Agent", "Guessing Agent", "Reflex Agent"]:
+        print(agent,"S =", LF_violation(str(path), agent=agent))
+
+    # real hardware
+    path3 = root / "data/data_real_hardware/ibm_torino_20260305_144642/real_hardware_run.json"
+    print("\nReal hardware:")
+    for agent in ["Betting Agent", "Guessing Agent", "Reflex Agent"]:
+        print(agent, "S =", LF_violation(str(path3), agent=agent))
