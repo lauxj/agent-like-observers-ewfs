@@ -59,7 +59,7 @@ if __name__ == "__main__":
 
     root = Path(__file__).resolve().parents[1]  # project root (one level above ewfs/)
     # Noiseless simulation test
-    path2 = root / "data/data_noiseless_simulation/noiseless_run_2026-03-06T10-41-11_shots10000.json"
+    path2 = root / "data/data_noiseless_simulation/noiseless_run_2026-03-06T15-47-39_shots10000.json"
     print("\nNoiseless simulation:")
     for agent in ["Betting Agent", "Guessing Agent", "Reflex Agent"]:
         print(agent, "S =", LF_violation(str(path2), agent=agent))

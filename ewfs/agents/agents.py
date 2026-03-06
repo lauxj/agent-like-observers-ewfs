@@ -52,17 +52,10 @@ def build_circuit_betting() -> QuantumCircuit:
 
     qc.cx(qr_SC[0], qr_M1[0])
 
-    with qc.if_test((c[1], 0)):
-        qc.ry(beta1, qr_SD[0])
-
-    with qc.if_test((c[1], 1)):
-        qc.ry(beta2, qr_SD[0])
-
     qc.ry(np.pi / 3, qr_SC[0])
 
     qc.cx(qr_M1[0], qr_W0[0])
 
-    qc.measure(qr_SD[0], c[4])
 
     qc.cx(qr_SC[0], qr_M2[0])
 
@@ -77,8 +70,15 @@ def build_circuit_betting() -> QuantumCircuit:
         qc.x(qr_W0[0])
         qc.ry(alpha, qr_SC[0])
 
+    with qc.if_test((c[1], 0)):
+        qc.ry(beta1, qr_SD[0])
+
+    with qc.if_test((c[1], 1)):
+        qc.ry(beta2, qr_SD[0])
+
     qc.measure(qr_M1[0], c[2])
     qc.measure(qr_SC[0], c[3])
+    qc.measure(qr_SD[0], c[4])
 
     return qc
 
@@ -114,19 +114,12 @@ def build_circuit_guessing() -> QuantumCircuit:
 
     qc.measure(qr_B_choice[0], c[1])
 
-    with qc.if_test((c[1], 0)):
-        qc.ry(beta1, qr_SD[0])
-
-    with qc.if_test((c[1], 1)):
-        qc.ry(beta2, qr_SD[0])
-
     qc.cx(qr_M1[0], qr_G[0])
 
     qc.ry(np.pi / 3, qr_SC[0])
 
     qc.cx(qr_SC[0], qr_M2[0])
 
-    qc.measure(qr_SD[0], c[4])
 
     qc.cx(qr_M2[0], qr_G[0])
 
@@ -138,8 +131,15 @@ def build_circuit_guessing() -> QuantumCircuit:
         qc.cx(qr_SC[0], qr_M1[0])
         qc.ry(alpha, qr_SC[0])
 
+    with qc.if_test((c[1], 0)):
+        qc.ry(beta1, qr_SD[0])
+
+    with qc.if_test((c[1], 1)):
+        qc.ry(beta2, qr_SD[0])
+
     qc.measure(qr_M1[0], c[2])
     qc.measure(qr_SC[0], c[3])
+    qc.measure(qr_SD[0], c[4])
 
     return qc
 
@@ -172,24 +172,24 @@ def build_circuit_reflex() -> QuantumCircuit:
 
     qc.measure(qr_B_choice[0], c[1])
 
-    with qc.if_test((c[1], 0)):
-        qc.ry(beta1, qr_SD[0])
-
     qc.cx(qr_SC[0], qr_M[0])
-
-    with qc.if_test((c[1], 1)):
-        qc.ry(beta2, qr_SD[0])
 
     qc.cx(qr_M[0], qr_L[0])
 
-    qc.measure(qr_SD[0], c[4])
 
     with qc.if_test((c[0], 1)):
         qc.cx(qr_M[0], qr_L[0])
         qc.cx(qr_SC[0], qr_M[0])
         qc.ry(alpha, qr_SC[0])
 
+    with qc.if_test((c[1], 0)):
+        qc.ry(beta1, qr_SD[0])
+
+    with qc.if_test((c[1], 1)):
+        qc.ry(beta2, qr_SD[0])
+
     qc.measure(qr_M[0], c[2])
     qc.measure(qr_SC[0], c[3])
+    qc.measure(qr_SD[0], c[4])
 
     return qc
