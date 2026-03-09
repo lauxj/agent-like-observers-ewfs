@@ -1,4 +1,8 @@
-import qiskit
+"""
+agents.py
+Builds all quantum circuits for the different agents using qiskit
+"""
+
 import numpy as np
 from qiskit import QuantumCircuit, QuantumRegister, ClassicalRegister
 
@@ -7,11 +11,8 @@ alpha = 3 * np.pi / 2
 beta1 = 3 * np.pi / 4
 beta2 = 1 * np.pi / 4
 
-
-
-
 def build_circuit_betting() -> QuantumCircuit:
-    """Betting agent."""
+    """Betting agent circuit builder."""
 
     # Quantum registers
     qr_SD = QuantumRegister(1, "SD")
@@ -25,40 +26,23 @@ def build_circuit_betting() -> QuantumCircuit:
 
     # Classical register (joint counts)
     c = ClassicalRegister(5, "c") # A_choice, B_choice, A_record (Arec), B_meas
-
-    #cA = ClassicalRegister(1, "cA")
-    #cB = ClassicalRegister(1, "cB")
-    #cM1Dump = ClassicalRegister(1, "cM1Dump")
-    #cSCDump = ClassicalRegister(1, "cSCDump")
-    #cBr = ClassicalRegister(1, "cBr")
-
     qc = QuantumCircuit(
         qr_SD, qr_SC, qr_M1, qr_M2, qr_W0, qr_W1, qr_A_choice, qr_B_choice,
         c,
         name="betting_agent",
     )
 
-
     qc.h(qr_SC[0])
     qc.h(qr_A_choice[0])
     qc.h(qr_B_choice[0])
-
     qc.x(qr_W0[0])
-
     qc.cx(qr_SC[0], qr_SD[0])
-
     qc.measure(qr_A_choice[0], c[0])
     qc.measure(qr_B_choice[0], c[1])
-
     qc.cx(qr_SC[0], qr_M1[0])
-
     qc.ry(np.pi / 3, qr_SC[0])
-
     qc.cx(qr_M1[0], qr_W0[0])
-
-
     qc.cx(qr_SC[0], qr_M2[0])
-
     qc.cx(qr_M2[0], qr_W1[0])
 
     with qc.if_test((c[0], 1)):
@@ -84,7 +68,7 @@ def build_circuit_betting() -> QuantumCircuit:
 
 
 def build_circuit_guessing() -> QuantumCircuit:
-    """Guessing agent."""
+    """Guessing agent circuit builder."""
 
     qr_SD = QuantumRegister(1, "SD")
     qr_SC = QuantumRegister(1, "SC")
@@ -105,26 +89,15 @@ def build_circuit_guessing() -> QuantumCircuit:
     qc.h(qr_SC[0])
     qc.h(qr_A_choice[0])
     qc.h(qr_B_choice[0])
-
     qc.cx(qr_SC[0], qr_SD[0])
-
     qc.measure(qr_A_choice[0], c[0])
-
     qc.cx(qr_SC[0], qr_M1[0])
-
     qc.measure(qr_B_choice[0], c[1])
-
     qc.cx(qr_M1[0], qr_G[0])
-
     qc.ry(np.pi / 3, qr_SC[0])
-
     qc.cx(qr_SC[0], qr_M2[0])
 
-
-    qc.cx(qr_M2[0], qr_G[0])
-
     with qc.if_test((c[0], 1)):
-        qc.cx(qr_M2[0], qr_G[0])
         qc.cx(qr_SC[0], qr_M2[0])
         qc.ry(-np.pi / 3, qr_SC[0])
         qc.cx(qr_M1[0], qr_G[0])
@@ -145,7 +118,7 @@ def build_circuit_guessing() -> QuantumCircuit:
 
 
 def build_circuit_reflex() -> QuantumCircuit:
-    """Reflex agent."""
+    """Reflex agent circuit builder."""
 
     qr_SD = QuantumRegister(1, "SD")
     qr_SC = QuantumRegister(1, "SC")
@@ -165,17 +138,11 @@ def build_circuit_reflex() -> QuantumCircuit:
     qc.h(qr_B_choice[0])
     qc.h(qr_SC[0])
     qc.h(qr_A_choice[0])
-
     qc.measure(qr_A_choice[0], c[0])
-
     qc.cx(qr_SC[0], qr_SD[0])
-
     qc.measure(qr_B_choice[0], c[1])
-
     qc.cx(qr_SC[0], qr_M[0])
-
     qc.cx(qr_M[0], qr_L[0])
-
 
     with qc.if_test((c[0], 1)):
         qc.cx(qr_M[0], qr_L[0])

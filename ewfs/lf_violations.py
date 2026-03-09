@@ -59,7 +59,7 @@ if __name__ == "__main__":
 
     root = Path(__file__).resolve().parents[1]  # project root (one level above ewfs/)
     # Noiseless simulation test
-    path2 = root / "data/data_noiseless_simulation/noiseless_run_2026-03-06T15-47-39_shots10000.json"
+    path2 = root / "data/data_noiseless_simulation/noiseless_run_2026-03-09T15-13-40_shots10000.json"
     print("\nNoiseless simulation:")
     for agent in ["Betting Agent", "Guessing Agent", "Reflex Agent"]:
         print(agent, "S =", LF_violation(str(path2), agent=agent))
@@ -67,12 +67,12 @@ if __name__ == "__main__":
     print()
     #fake_hardware test
     print("fake hardware simulation:")
-    path = root / "data/data_fake_hardware/ibm_torino_20260306_155454/fake_hardware_noise_sim.json"
+    path = root / "data/data_fake_hardware/ibm_torino_20260306_160146/fake_hardware_noise_sim.json"
     for agent in ["Betting Agent", "Guessing Agent", "Reflex Agent"]:
         print(agent,"S =", LF_violation(str(path), agent=agent))
 
     # real hardware
-    path3 = root / "data/data_real_hardware/ibm_torino_20260306_155642/processed_results.json"
+    path3 = root / "data/data_real_hardware/ibm_torino_20260306_160359/real_hardware_run.json"
     print("\nReal hardware:")
     for agent in ["Betting Agent", "Guessing Agent", "Reflex Agent"]:
         print(agent, "S =", LF_violation(str(path3), agent=agent))

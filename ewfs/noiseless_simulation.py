@@ -1,4 +1,8 @@
-import numpy as np
+"""
+noiseless_simulation.py:
+Performs noiseless simulation on noiseless AerSimulator from qiskit_aer
+"""
+
 import matplotlib.pyplot as plt
 from qiskit_aer import AerSimulator
 from pathlib import Path
@@ -7,7 +11,6 @@ from datetime import datetime
 
 # Agent circuits (ewfs/agents/agents.py)
 from ewfs.agents.agents import build_circuit_reflex, build_circuit_guessing, build_circuit_betting
-
 
 AGENTS = [
     ("Reflex Agent", build_circuit_reflex),
@@ -18,7 +21,6 @@ AGENTS = [
 # Simulator:
 sim = AerSimulator()
 
-# Project directory (masters_thesis_project)
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 # Where to save noiseless circuit plots (project root → results/plots_noiseless_simulation):
