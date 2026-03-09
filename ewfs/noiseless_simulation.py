@@ -1,6 +1,6 @@
 """
 noiseless_simulation.py:
-Performs noiseless simulation on noiseless AerSimulator from qiskit_aer
+Performs noiseless simulation on noiseless AerSimulator from qiskit_aer.
 """
 
 import matplotlib.pyplot as plt
@@ -9,7 +9,7 @@ from pathlib import Path
 import json
 from datetime import datetime
 
-# Agent circuits (ewfs/agents/agents.py)
+# Agent circuits import (ewfs/agents/agents.py)
 from ewfs.agents.agents import build_circuit_reflex, build_circuit_guessing, build_circuit_betting
 
 AGENTS = [
@@ -21,20 +21,22 @@ AGENTS = [
 # Simulator:
 sim = AerSimulator()
 
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
-# Where to save noiseless circuit plots (project root → results/plots_noiseless_simulation):
-PLOT_DIR = PROJECT_ROOT / "results" / "plots_noiseless_simulation"
-PLOT_DIR.mkdir(parents=True, exist_ok=True)
+# Where to save noiseless circuit plots
+project_root = Path(__file__).resolve().parent.parent
+plot_dir = project_root / "results" / "plots_noiseless_simulation"
+plot_dir.mkdir(parents=True, exist_ok=True)
 
-# Where to save noiseless simulation raw data (project root → data/data_noiseless_simulation):
-DATA_DIR = PROJECT_ROOT / "data" / "data_noiseless_simulation"
+# Where to save noiseless simulation raw data
+DATA_DIR = project_root / "data" / "data_noiseless_simulation"
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 
 def run_noiseless_simulation(shots=10000, save=True, make_plots=True):
     """Run noiseless Aer simulations for all agent circuits."""
 
+    print("\n=== Noiseless simulation ===")
+    print(f"Shots: {shots}")
     run_data = {
         "kind": "noiseless_simulation",
         "timestamp": datetime.now().isoformat(timespec="seconds"),
@@ -50,14 +52,14 @@ def run_noiseless_simulation(shots=10000, save=True, make_plots=True):
         # Qiskit counts are already JSON-friendly in most cases, but ensure ints.
         counts_json = {str(k): int(v) for k, v in counts.items()}
 
-        print(f"{name} (noiseless): counts = {counts_json}")
+        print(f"  {name}: done")
 
         run_data["agents"][name] = {
             "counts": counts_json,
         }
 
         if make_plots:
-            agent_folder = PLOT_DIR / name.replace(" ", "_")
+            agent_folder = plot_dir / name.replace(" ", "_")
             agent_folder.mkdir(parents=True, exist_ok=True)
             fig = qc.draw(output="mpl", fold=-1)
             fig.savefig(agent_folder / "circuit.png", dpi=300, bbox_inches="tight")
@@ -69,7 +71,7 @@ def run_noiseless_simulation(shots=10000, save=True, make_plots=True):
         with open(out_path, "w", encoding="utf-8") as f:
             json.dump(run_data, f, indent=2, sort_keys=True)
 
-        print(f"Saved noiseless run data to: {out_path}")
+        print(f"Saved data → {out_path}")
 
     return run_data
 

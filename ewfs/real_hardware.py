@@ -1,0 +1,138 @@
+"""
+real_hardware.py
+Runs a real hardware run on actual IBM hardware.
+IBM API token must be stored locally.
+"""
+
+from pathlib import Path
+import json
+from datetime import datetime
+import pickle
+from qiskit_ibm_runtime import SamplerV2 as Sampler
+from qiskit_ibm_runtime import QiskitRuntimeService
+from ibm_transpilation import transpile_all_agents
+
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+
+DATA_DIR_REAL = PROJECT_ROOT / "data" / "data_real_hardware"
+DATA_DIR_REAL.mkdir(parents=True, exist_ok=True)
+
+
+def save_json(path: Path, obj):
+    """Save JSON file."""
+    with open(path, "w") as f:
+        json.dump(obj, f, indent=2)
+
+
+def counts_to_jsonable(counts):
+    """Convert Qiskit counts dict to JSON-serializable format."""
+    return {str(k): int(v) for k, v in counts.items()}
+
+
+def get_counts_from_sampler_result(pub_res):
+    """Extract single-register counts from a SamplerV2 result item."""
+    data = pub_res.data
+
+    if hasattr(data, "keys"):
+        reg_names = list(data.keys())
+        if len(reg_names) != 1:
+            raise ValueError(
+                f"Expected exactly 1 classical register, found {len(reg_names)}: {reg_names}"
+            )
+        reg = reg_names[0]
+        return counts_to_jsonable(data[reg].get_counts())
+
+    reg_names = [k for k in data.__dict__.keys() if not k.startswith("_")]
+    regs_with_counts = []
+    for reg in reg_names:
+        datum = getattr(data, reg)
+        if hasattr(datum, "get_counts"):
+            regs_with_counts.append(reg)
+
+    if len(regs_with_counts) != 1:
+        raise ValueError(
+            f"Expected exactly 1 classical register with counts, found {len(regs_with_counts)}: {regs_with_counts}"
+        )
+
+    reg = regs_with_counts[0]
+    datum = getattr(data, reg)
+    return counts_to_jsonable(datum.get_counts())
+
+
+def submit_hardware_job(transpiled_by_agent, backend, shots):
+    """Submit one job to IBM real hardware containing one circuit per agent."""
+    sampler = Sampler(mode=backend)
+
+    all_circuits = []
+    meta_info = []
+
+    for agent_name, tqc in transpiled_by_agent.items():
+        all_circuits.append(tqc)
+        meta_info.append(agent_name)
+
+    job = sampler.run(all_circuits, shots=shots)
+    results = job.result()
+    return job, results, meta_info
+
+
+def save_hardware_results(job, results, meta_info, backend, shots):
+    """Save hardware result counts for one backend run."""
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    results_dir = DATA_DIR_REAL / f"{backend.name}_{timestamp}"
+    results_dir.mkdir(parents=True, exist_ok=True)
+
+    try:
+        job_id = job.job_id()
+    except Exception:
+        job_id = None
+
+    save_json(
+        results_dir / "job_info.json",
+        {
+            "backend": backend.name,
+            "job_id": job_id,
+            "shots": int(shots),
+            "timestamp": timestamp,
+        },
+    )
+
+    run_data = {
+        "agents": {},
+        "kind": "real_hardware_run",
+        "shots": int(shots),
+        "timestamp": datetime.now().strftime("%Y-%m-%dT%H:%M:%S"),
+    }
+
+    for agent_name, pub_res in zip(meta_info, results):
+        counts = get_counts_from_sampler_result(pub_res)
+        run_data["agents"][agent_name] = {"counts": counts}
+
+    save_json(results_dir / "real_hardware_run.json", run_data)
+
+    with open(results_dir / "raw_sampler_result.pkl", "wb") as f:
+        pickle.dump(results, f)
+
+    print(f"Saved real-hardware data to: {results_dir.resolve()}")
+
+
+def run_real_hardware_for_backend(backend, transpiled_by_agent, shots=300):
+    """Run one real-hardware job for all agents on one backend."""
+    print("\n--- Real hardware run ---")
+    job, results, meta_info = submit_hardware_job(
+        transpiled_by_agent=transpiled_by_agent,
+        backend=backend,
+        shots=shots,
+    )
+    save_hardware_results(
+        job=job,
+        results=results,
+        meta_info=meta_info,
+        backend=backend,
+        shots=shots,
+    )
+
+
+if __name__ == "__main__":
+    backend = QiskitRuntimeService().backend("ibm_torino")
+    transpiled = transpile_all_agents(backend, save_plots=False)
+    run_real_hardware_for_backend(backend, transpiled, shots=300)
