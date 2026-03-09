@@ -58,7 +58,7 @@ def LF_violation(path, agent="Betting"):
     return S(load(path, agent=agent))
 
 
- if __name__ == "__main__":
+if __name__ == "__main__":
 
      root = Path(__file__).resolve().parents[1]  # project root (one level above ewfs/)
 
