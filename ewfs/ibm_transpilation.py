@@ -11,7 +11,7 @@ from qiskit import transpile
 from qiskit.visualization import circuit_drawer
 from qiskit_ibm_runtime import QiskitRuntimeService
 
-from ewfs.agents.agents import (
+from ewfs.agents import (
     build_circuit_reflex,
     build_circuit_guessing,
     build_circuit_betting,
@@ -66,11 +66,13 @@ def transpile_agent_circuit(agent_name, build_fn, backend, save_plots=True):
 
     if save_plots:
         tqc.name = agent_name
-        agent_dir = PLOT_DIR / "transpiled" / agent_name.replace(" ", "_")
+        agent_dir = PLOT_DIR / agent_name.replace(" ", "_")
         agent_dir.mkdir(parents=True, exist_ok=True)
-        plot_path = agent_dir / f"circuit_depth{tqc.depth()}_cz{cz_n}.png"
+        filename = f"{agent_name.replace(' ', '_')}_circuit_depth{tqc.depth()}_cz{cz_n}.png"
+        plot_path = agent_dir / filename
 
         fig = circuit_drawer(tqc, output="mpl", fold=-1)
+        fig.suptitle(f"{agent_name} – Transpiled Circuit", fontsize=14)
         fig.savefig(plot_path, dpi=300, bbox_inches="tight")
         plt.close(fig)
 

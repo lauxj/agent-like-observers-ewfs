@@ -10,7 +10,7 @@ import json
 from datetime import datetime
 
 # Agent circuits import (ewfs/agents/agents.py)
-from ewfs.agents.agents import build_circuit_reflex, build_circuit_guessing, build_circuit_betting
+from ewfs.agents import build_circuit_reflex, build_circuit_guessing, build_circuit_betting
 
 AGENTS = [
     ("Reflex Agent", build_circuit_reflex),
@@ -62,7 +62,9 @@ def run_noiseless_simulation(shots=10000, save=True, make_plots=True):
             agent_folder = plot_dir / name.replace(" ", "_")
             agent_folder.mkdir(parents=True, exist_ok=True)
             fig = qc.draw(output="mpl", fold=-1)
-            fig.savefig(agent_folder / "circuit.png", dpi=300, bbox_inches="tight")
+            fig.suptitle(f"{name} – Quantum Circuit", fontsize=14)
+            filename = f"{name.replace(' ', '_')}_circuit.png"
+            fig.savefig(agent_folder / filename, dpi=300, bbox_inches="tight")
             plt.close(fig)
 
     if save:
