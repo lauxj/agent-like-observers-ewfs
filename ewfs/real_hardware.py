@@ -24,6 +24,30 @@ def save_json(path: Path, obj):
         json.dump(obj, f, indent=2)
 
 
+def to_jsonable(obj):
+    """Recursively convert metadata objects into JSON-serializable values."""
+    if obj is None or isinstance(obj, (str, int, float, bool)):
+        return obj
+    if isinstance(obj, dict):
+        return {str(k): to_jsonable(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple, set)):
+        return [to_jsonable(v) for v in obj]
+    if hasattr(obj, "__dict__"):
+        return {
+            str(k): to_jsonable(v)
+            for k, v in obj.__dict__.items()
+            if not str(k).startswith("_")
+        }
+    return str(obj)
+
+
+def extract_pub_result_metadata(pub_res):
+    """Extract PUB-level metadata returned by SamplerV2."""
+    if hasattr(pub_res, "metadata"):
+        return to_jsonable(pub_res.metadata)
+    return {}
+
+
 def counts_to_jsonable(counts):
     """Convert Qiskit counts dict to JSON-serializable format."""
     return {str(k): int(v) for k, v in counts.items()}
@@ -63,6 +87,9 @@ def submit_hardware_job(transpiled_by_agent, backend, shots):
     """Submit one job to IBM real hardware containing one circuit per agent."""
     sampler = Sampler(mode=backend)
 
+    sampler.options.experimental = {"execution": {"scheduler_timing": True}}
+    print("Enabled scheduler_timing for Sampler job.")
+
     all_circuits = []
     meta_info = []
 
@@ -75,7 +102,7 @@ def submit_hardware_job(transpiled_by_agent, backend, shots):
     return job, results, meta_info
 
 
-def save_hardware_results(job, results, meta_info, backend, shots):
+def save_hardware_results(job, results, meta_info, backend, shots, transpiled_by_agent):
     """Save hardware result counts for one backend run."""
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     results_dir = DATA_DIR_REAL / f"{backend.name}_{timestamp}"
@@ -103,11 +130,16 @@ def save_hardware_results(job, results, meta_info, backend, shots):
         "timestamp": datetime.now().strftime("%Y-%m-%dT%H:%M:%S"),
     }
 
+    timing_data = {}
+
     for agent_name, pub_res in zip(meta_info, results):
         counts = get_counts_from_sampler_result(pub_res)
+        metadata = extract_pub_result_metadata(pub_res)
         run_data["agents"][agent_name] = {"counts": counts}
+        timing_data[agent_name] = metadata
 
     save_json(results_dir / "real_hardware_run.json", run_data)
+    save_json(results_dir / "scheduler_timing_metadata.json", timing_data)
 
     with open(results_dir / "raw_sampler_result.pkl", "wb") as f:
         pickle.dump(results, f)
@@ -129,6 +161,7 @@ def run_real_hardware_for_backend(backend, transpiled_by_agent, shots=300):
         meta_info=meta_info,
         backend=backend,
         shots=shots,
+        transpiled_by_agent=transpiled_by_agent,
     )
 
 
