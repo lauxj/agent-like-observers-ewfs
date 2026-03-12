@@ -38,9 +38,17 @@ def build_circuit_betting() -> QuantumCircuit:
     # wallet initialization
     qc.x(qr_W0[0])
 
+    # x,y,c simultaneously:
+
     # Charlie's 1st measurement:
     qc.barrier(qr_SC[0], qr_SD[0], qr_M1[0], qr_M2[0], qr_W0[0], qr_W1[0], qr_A_choice[0], qr_B_choice[0])
     qc.cx(qr_SC[0], qr_M1[0])
+    # Alice's choice:
+    qc.h(qr_A_choice[0])
+    qc.measure(qr_A_choice[0], c[0])
+    qc.h(qr_B_choice[0])
+    qc.measure(qr_B_choice[0], c[1])
+
 
     # Charlies bet: wallet update
     qc.barrier(qr_SC[0], qr_SD[0], qr_M1[0], qr_M2[0], qr_W0[0], qr_W1[0], qr_A_choice[0], qr_B_choice[0])
@@ -55,11 +63,6 @@ def build_circuit_betting() -> QuantumCircuit:
     qc.barrier(qr_SC[0], qr_SD[0], qr_M1[0], qr_M2[0], qr_W0[0], qr_W1[0], qr_A_choice[0], qr_B_choice[0])
     qc.cx(qr_M2[0], qr_W1[0]) # Wallet update based on outcome of second measurement
 
-    # Alice's choice:
-    qc.barrier(qr_SC[0], qr_SD[0], qr_M1[0], qr_M2[0], qr_W0[0], qr_W1[0], qr_A_choice[0], qr_B_choice[0])
-    qc.h(qr_A_choice[0])
-    qc.measure(qr_A_choice[0], c[0])
-
     # Conditional block for setting A=1 (Undo and measure system):
     qc.barrier(qr_SC[0], qr_SD[0], qr_M1[0], qr_M2[0], qr_W0[0], qr_W1[0], qr_A_choice[0], qr_B_choice[0])
     with qc.if_test((c[0], 1)):
@@ -71,16 +74,6 @@ def build_circuit_betting() -> QuantumCircuit:
         qc.x(qr_W0[0])
         qc.ry(alpha, qr_SC[0])
 
-    # Alice's measurement(s)
-    qc.barrier(qr_SC[0], qr_SD[0], qr_M1[0], qr_M2[0], qr_W0[0], qr_W1[0], qr_A_choice[0], qr_B_choice[0])
-    qc.measure(qr_M1[0], c[2]) # Alice measurement for setting A1 (ask Charlie)
-    qc.measure(qr_SC[0], c[3]) # Alice measurement for setting A2 (Undo)
-
-    # Bob's choice operation
-    qc.barrier(qr_SC[0], qr_SD[0], qr_M1[0], qr_M2[0], qr_W0[0], qr_W1[0], qr_A_choice[0], qr_B_choice[0])
-    qc.h(qr_B_choice[0])
-    qc.measure(qr_B_choice[0], c[1])
-
     # Bob's measurements conditioned on setting:
     qc.barrier(qr_SC[0], qr_SD[0], qr_M1[0], qr_M2[0], qr_W0[0], qr_W1[0], qr_A_choice[0], qr_B_choice[0])
     with qc.if_test((c[4], 0)): # setting B=1
@@ -88,8 +81,12 @@ def build_circuit_betting() -> QuantumCircuit:
     with qc.if_test((c[4], 1)): # setting B=2
         qc.ry(beta2, qr_SD[0])
 
-    # Bob's measurement
+    # Alice's measurement(s)
     qc.barrier(qr_SC[0], qr_SD[0], qr_M1[0], qr_M2[0], qr_W0[0], qr_W1[0], qr_A_choice[0], qr_B_choice[0])
+    qc.measure(qr_M1[0], c[2]) # Alice measurement for setting A1 (ask Charlie)
+    qc.measure(qr_SC[0], c[3]) # Alice measurement for setting A2 (Undo)
+
+    # Bob's measurement
     qc.measure(qr_SD[0], c[4])
 
     return qc
@@ -187,19 +184,16 @@ def build_circuit_reflex() -> QuantumCircuit:
     qc.h(qr_B_choice[0])
     qc.h(qr_SC[0])
     qc.h(qr_A_choice[0])
+    qc.measure(qr_A_choice[0], c[0])
     qc.cx(qr_SC[0], qr_SD[0])
+    qc.measure(qr_B_choice[0], c[1])
     qc.cx(qr_SC[0], qr_M[0])
-    qc.barrier(qr_SC[0], qr_M[0], qr_L[0], qr_B_choice[0])
     qc.cx(qr_M[0], qr_L[0])
 
     with qc.if_test((c[0], 1)):
         qc.cx(qr_M[0], qr_L[0])
         qc.cx(qr_SC[0], qr_M[0])
         qc.ry(alpha, qr_SC[0])
-
-    # Final measurements at the end.
-    qc.measure(qr_A_choice[0], c[0])
-    qc.measure(qr_B_choice[0], c[1])
 
     with qc.if_test((c[1], 0)):
         qc.ry(beta1, qr_SD[0])
@@ -212,3 +206,4 @@ def build_circuit_reflex() -> QuantumCircuit:
     qc.measure(qr_SD[0], c[4])
 
     return qc
+
