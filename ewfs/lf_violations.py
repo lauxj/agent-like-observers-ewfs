@@ -4,6 +4,7 @@ Calculates LF violations
 """
 
 import json
+from pathlib import Path
 
 def pm(bit):
     # 0 -> +1, 1 -> -1
@@ -58,6 +59,33 @@ def LF_violation(path, agent="Betting"):
     return S(load(path, agent=agent))
 
 
+def save_json(path: Path, obj):
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(obj, f, indent=2)
+
+
+
+def save_lf_violations_for_run(path, agent_names=None):
+    """Compute LF violations for one run file and save them into the same run folder."""
+    if agent_names is None:
+        agent_names = ["Betting Agent", "Guessing Agent", "Reflex Agent"]
+
+    run_path = Path(path)
+    results = {
+        "kind": "lf_violations",
+        "source_file": str(run_path.name),
+        "agents": {},
+    }
+
+    for agent in agent_names:
+        results["agents"][agent] = {"S": LF_violation(str(run_path), agent=agent)}
+
+    out_path = run_path.parent / "lf_violations.json"
+    save_json(out_path, results)
+    print(f"Saved LF violations to: {out_path.resolve()}")
+    return results
+
+
 if __name__ == "__main__":
 
      root = Path(__file__).resolve().parents[1]  # project root (one level above ewfs/)
@@ -65,19 +93,21 @@ if __name__ == "__main__":
      # Noiseless simulation test
      path1 = root / "INSERT PATH HERE FOR TESTING"
      print("\nNoiseless simulation:")
-     for agent in ["Betting Agent", "Guessing Agent", "Reflex Agent"]:
-         print(agent, "S =", LF_violation(str(path1), agent=agent))
+     results1 = save_lf_violations_for_run(path1)
+     for agent, values in results1["agents"].items():
+         print(agent, "S =", values["S"])
 
      print()
-     #fake_hardware test
+     # fake_hardware test
      print("fake hardware simulation:")
      path2 = root / "INSERT PATH HERE FOR TESTING"
-     for agent in ["Betting Agent", "Guessing Agent", "Reflex Agent"]:
-         print(agent,"S =", LF_violation(str(path2), agent=agent))
+     results2 = save_lf_violations_for_run(path2)
+     for agent, values in results2["agents"].items():
+         print(agent, "S =", values["S"])
 
      # real hardware
      print("\nReal hardware:")
      path3 = root / "INSERT PATH HERE FOR TESTING"
-     for agent in ["Betting Agent", "Guessing Agent", "Reflex Agent"]:
-         print(agent, "S =", LF_violation(str(path3), agent=agent))
-
+     results3 = save_lf_violations_for_run(path3)
+     for agent, values in results3["agents"].items():
+         print(agent, "S =", values["S"])
