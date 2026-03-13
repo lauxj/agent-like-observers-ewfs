@@ -7,11 +7,11 @@ Runner file to control all possible runs and plots for:
 """
 
 from noiseless_simulation import run_noiseless_simulation
-from ibm_transpilation import transpile_all_agents
-from fake_hardware import run_fake_hardware_for_backend
-from real_hardware import run_real_hardware_for_backend
+from fake_hardware import run_fake_hardware_for_backend, prepare_fake_hardware_run
+from real_hardware import run_real_hardware_for_backend, prepare_real_hardware_run
 from pathlib import Path
 from lf_violations import LF_violation
+from time_ordering_hardware import main as run_time_ordering_hardware
 
 
 # -----------------------------------------------------------------------------
@@ -35,7 +35,10 @@ FAKE_HARDWARE_SHOTS = 10_000
 
 # Real hardware
 DO_REAL_HARDWARE = True
-REAL_HARDWARE_SHOTS = 1_000
+REAL_HARDWARE_SHOTS = 10_000
+
+# Scheduler timing / time ordering analysis for the real hardware run
+DO_TIME_ORDERING_HARDWARE = True
 
 # Backends to use
 REAL_BACKENDS = {
@@ -51,7 +54,7 @@ def get_latest_noiseless_file():
     """Return the newest noiseless simulation JSON file."""
     root = Path(__file__).resolve().parent.parent
     data_dir = root / "data" / "data_noiseless_simulation"
-    candidates = sorted(data_dir.glob("noiseless_run_*.json"))
+    candidates = sorted(data_dir.glob("noiseless_simulation_*/noiseless_simulation.json"))
     return candidates[-1] if candidates else None
 
 
@@ -123,16 +126,35 @@ def run_all():
         backend = get_real_backend(service, backend_name)
         print(f"\n=== Backend: {backend.name} ===")
 
-        transpiled_by_agent = transpile_all_agents(
-            backend=backend,
-            save_plots=SAVE_IBM_TRANSPILATION_PLOTS,
-        )
+        fake_transpiled_by_agent = None
+        fake_folder_ts = None
+        real_transpiled_by_agent = None
+        real_folder_ts = None
+
+        if DO_FAKE_HARDWARE_SIM:
+            fake_transpiled_by_agent, fake_folder_ts = prepare_fake_hardware_run(
+                backend=backend,
+                save_plots=SAVE_IBM_TRANSPILATION_PLOTS,
+            )
+
+        if DO_REAL_HARDWARE:
+            real_transpiled_by_agent, real_folder_ts = prepare_real_hardware_run(
+                backend=backend,
+                save_plots=SAVE_IBM_TRANSPILATION_PLOTS,
+            )
+
+        if DO_IBM_TRANSPILATION and not DO_FAKE_HARDWARE_SIM and not DO_REAL_HARDWARE:
+            prepare_real_hardware_run(
+                backend=backend,
+                save_plots=SAVE_IBM_TRANSPILATION_PLOTS,
+            )
 
         if DO_FAKE_HARDWARE_SIM:
             run_fake_hardware_for_backend(
                 backend=backend,
-                transpiled_by_agent=transpiled_by_agent,
+                transpiled_by_agent=fake_transpiled_by_agent,
                 shots=FAKE_HARDWARE_SHOTS,
+                folder_ts=fake_folder_ts,
             )
             if CALCULATE_LF_VIOLATIONS:
                 print_lf_violations(
@@ -143,9 +165,15 @@ def run_all():
         if DO_REAL_HARDWARE:
             run_real_hardware_for_backend(
                 backend=backend,
-                transpiled_by_agent=transpiled_by_agent,
+                transpiled_by_agent=real_transpiled_by_agent,
                 shots=REAL_HARDWARE_SHOTS,
+                folder_ts=real_folder_ts,
             )
+
+            if DO_TIME_ORDERING_HARDWARE:
+                print(f"\n=== Scheduler timing / time ordering ({backend.name}) ===")
+                run_time_ordering_hardware()
+
             if CALCULATE_LF_VIOLATIONS:
                 print_lf_violations(
                     f"Real hardware run ({backend.name})",

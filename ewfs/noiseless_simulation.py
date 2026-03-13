@@ -22,14 +22,16 @@ AGENTS = [
 sim = AerSimulator()
 
 
-# Where to save noiseless circuit plots
+# Project root and base output folders
 project_root = Path(__file__).resolve().parent.parent
-plot_dir = project_root / "results" / "plots_noiseless_simulation"
-plot_dir.mkdir(parents=True, exist_ok=True)
 
 # Where to save noiseless simulation raw data
 DATA_DIR = project_root / "data" / "data_noiseless_simulation"
 DATA_DIR.mkdir(parents=True, exist_ok=True)
+
+# Where to save noiseless circuit plots
+RESULTS_DIR = project_root / "results" / "plots" / "plots_noiseless_simulation"
+RESULTS_DIR.mkdir(parents=True, exist_ok=True)
 
 
 def run_noiseless_simulation(shots=10000, save=True, make_plots=True):
@@ -37,6 +39,18 @@ def run_noiseless_simulation(shots=10000, save=True, make_plots=True):
 
     print("\n=== Noiseless simulation ===")
     print(f"Shots: {shots}")
+
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    run_folder_name = f"noiseless_simulation_{timestamp}"
+
+    data_run_dir = DATA_DIR / run_folder_name
+    data_run_dir.mkdir(parents=True, exist_ok=True)
+
+    plots_run_dir = RESULTS_DIR / run_folder_name
+    plots_dir = plots_run_dir / "circuit_plots"
+    if make_plots:
+        plots_dir.mkdir(parents=True, exist_ok=True)
+
     run_data = {
         "kind": "noiseless_simulation",
         "timestamp": datetime.now().isoformat(timespec="seconds"),
@@ -59,7 +73,7 @@ def run_noiseless_simulation(shots=10000, save=True, make_plots=True):
         }
 
         if make_plots:
-            agent_folder = plot_dir / name.replace(" ", "_")
+            agent_folder = plots_dir / name.replace(" ", "_")
             agent_folder.mkdir(parents=True, exist_ok=True)
             fig = qc.draw(output="mpl", fold=-1)
             fig.suptitle(f"{name} – Quantum Circuit", fontsize=14)
@@ -68,12 +82,13 @@ def run_noiseless_simulation(shots=10000, save=True, make_plots=True):
             plt.close(fig)
 
     if save:
-        ts_safe = run_data["timestamp"].replace(":", "-")
-        out_path = DATA_DIR / f"noiseless_run_{ts_safe}_shots{shots}.json"
+        out_path = data_run_dir / "noiseless_simulation.json"
         with open(out_path, "w", encoding="utf-8") as f:
             json.dump(run_data, f, indent=2, sort_keys=True)
 
         print(f"Saved data → {out_path}")
+        if make_plots:
+            print(f"Saved circuit plots → {plots_dir}")
 
     return run_data
 

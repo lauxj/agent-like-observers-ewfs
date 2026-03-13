@@ -9,13 +9,20 @@ from datetime import datetime
 from qiskit_aer import AerSimulator
 from qiskit_aer.noise import NoiseModel
 from qiskit_ibm_runtime import QiskitRuntimeService
-from ibm_transpilation import transpile_all_agents
+from ibm_transpilation import transpile_all_agents, PLOT_DIR as IBM_TRANSPILATION_PLOT_DIR
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 DATA_DIR_FAKE = PROJECT_ROOT / "data" / "data_fake_hardware"
 DATA_DIR_FAKE.mkdir(parents=True, exist_ok=True)
 
 FAKE_NOISE_SEED = None
+
+
+def make_run_folder_name(backend, folder_ts=None):
+    """Create the shared run-folder name used for data and plots."""
+    if folder_ts is None:
+        folder_ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    return folder_ts, f"{backend.name}_{folder_ts}"
 
 
 def save_json(path: Path, obj):
@@ -39,7 +46,19 @@ def simulate_with_backend_noise(tqc, backend, shots, sim=None):
     return counts_to_jsonable(counts)
 
 
-def run_fake_hardware_for_backend(backend, transpiled_by_agent, shots=10_000):
+def prepare_fake_hardware_run(backend, save_plots=True, folder_ts=None):
+    """Prepare transpiled circuits and matching plot folder for one fake-hardware run."""
+    folder_ts, run_folder_name = make_run_folder_name(backend, folder_ts)
+    plots_dir = IBM_TRANSPILATION_PLOT_DIR / "fake_hardware" / run_folder_name
+    transpiled_by_agent = transpile_all_agents(
+        backend,
+        save_plots=save_plots,
+        plots_dir=plots_dir,
+    )
+    return transpiled_by_agent, folder_ts
+
+
+def run_fake_hardware_for_backend(backend, transpiled_by_agent, shots=10_000, folder_ts=None):
     """Run calibrated-noise simulations for all agents on one backend and save raw data."""
     print("\n=== Fake hardware simulation ===")
     print(f"Backend: {backend.name}")
@@ -60,8 +79,8 @@ def run_fake_hardware_for_backend(backend, transpiled_by_agent, shots=10_000):
         print(f"  {agent_name}: done")
         run_data["agents"][agent_name] = {"counts": counts}
 
-    folder_ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-    out_dir = DATA_DIR_FAKE / f"{backend.name}_{folder_ts}"
+    folder_ts, run_folder_name = make_run_folder_name(backend, folder_ts)
+    out_dir = DATA_DIR_FAKE / run_folder_name
     out_dir.mkdir(parents=True, exist_ok=True)
 
     save_json(out_dir / "fake_hardware_noise_sim.json", run_data)
@@ -70,5 +89,5 @@ def run_fake_hardware_for_backend(backend, transpiled_by_agent, shots=10_000):
 
 if __name__ == "__main__":
     backend = QiskitRuntimeService().backend("ibm_torino")
-    transpiled = transpile_all_agents(backend, save_plots=False)
-    run_fake_hardware_for_backend(backend, transpiled, shots=10_000)
+    transpiled, folder_ts = prepare_fake_hardware_run(backend, save_plots=True)
+    run_fake_hardware_for_backend(backend, transpiled, shots=10_000, folder_ts=folder_ts)

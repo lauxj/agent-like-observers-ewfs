@@ -10,12 +10,19 @@ from datetime import datetime
 import pickle
 from qiskit_ibm_runtime import SamplerV2 as Sampler
 from qiskit_ibm_runtime import QiskitRuntimeService
-from ibm_transpilation import transpile_all_agents
+from ibm_transpilation import transpile_all_agents, PLOT_DIR as IBM_TRANSPILATION_PLOT_DIR
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 DATA_DIR_REAL = PROJECT_ROOT / "data" / "data_real_hardware"
 DATA_DIR_REAL.mkdir(parents=True, exist_ok=True)
+
+
+def make_run_folder_name(backend, folder_ts=None):
+    """Create the shared run-folder name used for data and plots."""
+    if folder_ts is None:
+        folder_ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    return folder_ts, f"{backend.name}_{folder_ts}"
 
 
 def save_json(path: Path, obj):
@@ -102,10 +109,10 @@ def submit_hardware_job(transpiled_by_agent, backend, shots):
     return job, results, meta_info
 
 
-def save_hardware_results(job, results, meta_info, backend, shots, transpiled_by_agent):
+def save_hardware_results(job, results, meta_info, backend, shots, transpiled_by_agent, folder_ts=None):
     """Save hardware result counts for one backend run."""
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    results_dir = DATA_DIR_REAL / f"{backend.name}_{timestamp}"
+    folder_ts, run_folder_name = make_run_folder_name(backend, folder_ts)
+    results_dir = DATA_DIR_REAL / run_folder_name
     results_dir.mkdir(parents=True, exist_ok=True)
 
     try:
@@ -119,7 +126,7 @@ def save_hardware_results(job, results, meta_info, backend, shots, transpiled_by
             "backend": backend.name,
             "job_id": job_id,
             "shots": int(shots),
-            "timestamp": timestamp,
+            "timestamp": folder_ts,
         },
     )
 
@@ -147,7 +154,19 @@ def save_hardware_results(job, results, meta_info, backend, shots, transpiled_by
     print(f"Saved real-hardware data to: {results_dir.resolve()}")
 
 
-def run_real_hardware_for_backend(backend, transpiled_by_agent, shots=300):
+def prepare_real_hardware_run(backend, save_plots=True, folder_ts=None):
+    """Prepare transpiled circuits and matching plot folder for one real-hardware run."""
+    folder_ts, run_folder_name = make_run_folder_name(backend, folder_ts)
+    plots_dir = IBM_TRANSPILATION_PLOT_DIR / "real_hardware" / run_folder_name
+    transpiled_by_agent = transpile_all_agents(
+        backend,
+        save_plots=save_plots,
+        plots_dir=plots_dir,
+    )
+    return transpiled_by_agent, folder_ts
+
+
+def run_real_hardware_for_backend(backend, transpiled_by_agent, shots=300, folder_ts=None):
     """Run one real-hardware job for all agents on one backend."""
     print("\n--- Real hardware run ---")
     job, results, meta_info = submit_hardware_job(
@@ -162,10 +181,16 @@ def run_real_hardware_for_backend(backend, transpiled_by_agent, shots=300):
         backend=backend,
         shots=shots,
         transpiled_by_agent=transpiled_by_agent,
+        folder_ts=folder_ts,
     )
 
 
 if __name__ == "__main__":
     backend = QiskitRuntimeService().backend("ibm_torino")
-    transpiled = transpile_all_agents(backend, save_plots=False)
-    run_real_hardware_for_backend(backend, transpiled, shots=300)
+    transpiled, folder_ts = prepare_real_hardware_run(backend, save_plots=True)
+    run_real_hardware_for_backend(
+        backend,
+        transpiled,
+        shots=300,
+        folder_ts=folder_ts,
+    )

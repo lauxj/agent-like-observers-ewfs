@@ -24,7 +24,7 @@ warnings.filterwarnings(
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
-PLOT_DIR = PROJECT_ROOT / "results" / "plots_ibm_transpilation"
+PLOT_DIR = PROJECT_ROOT / "results" / "plots" / "plots_ibm_transpilation"
 PLOT_DIR.mkdir(parents=True, exist_ok=True)
 
 AGENTS = [
@@ -42,7 +42,7 @@ MANUAL_LAYOUTS_BY_SIZE = {
 OPT_LEVEL = 0
 
 
-def transpile_agent_circuit(agent_name, build_fn, backend, save_plots=True):
+def transpile_agent_circuit(agent_name, build_fn, backend, save_plots=True, plots_dir=None):
     """Build and transpile one circuit for one agent."""
     print(f"  {agent_name}: transpiling")
 
@@ -66,7 +66,8 @@ def transpile_agent_circuit(agent_name, build_fn, backend, save_plots=True):
 
     if save_plots:
         tqc.name = agent_name
-        agent_dir = PLOT_DIR / agent_name.replace(" ", "_")
+        base_plot_dir = plots_dir if plots_dir is not None else PLOT_DIR
+        agent_dir = base_plot_dir / agent_name.replace(" ", "_")
         agent_dir.mkdir(parents=True, exist_ok=True)
         filename = f"{agent_name.replace(' ', '_')}_circuit_depth{tqc.depth()}_cz{cz_n}.png"
         plot_path = agent_dir / filename
@@ -79,7 +80,7 @@ def transpile_agent_circuit(agent_name, build_fn, backend, save_plots=True):
     return tqc
 
 
-def transpile_all_agents(backend, save_plots=True):
+def transpile_all_agents(backend, save_plots=True, plots_dir=None):
     """Transpile all agent circuits for one backend."""
     print("\n=== Transpilation ===")
     print(f"Backend: {backend.name}")
@@ -90,6 +91,7 @@ def transpile_all_agents(backend, save_plots=True):
             build_fn=build_fn,
             backend=backend,
             save_plots=save_plots,
+            plots_dir=plots_dir,
         )
     return out
 
