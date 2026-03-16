@@ -34,7 +34,8 @@ AGENTS = [
 ]
 
 MANUAL_LAYOUTS_BY_SIZE = {
-    6: [28, 29, 30, 31, 14, 129],          # Reflex Agent
+    #6: [28, 29, 30, 31, 14, 129],          # Reflex Agent
+    6: [60,61,62,63, 14, 129],  # Reflex Agent
     7: [54,61,62,60,63, 14, 129],      # Guessing Agent
     8: [54, 61, 62, 60, 63, 59, 14, 129],  # Betting Agent
 }

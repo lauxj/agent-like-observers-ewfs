@@ -97,7 +97,7 @@ def build_circuit_betting() -> QuantumCircuit:
     qc.measure(qr_SD[0], c[4])
 
     # other measurements
-    qc.barrier(qr_SC[0], qr_SD[0], qr_M1[0], qr_M2[0], qr_W0[0], qr_W1[0], qr_A_choice[0], qr_B_choice[0])
+    #qc.barrier(qr_SC[0], qr_SD[0], qr_M1[0], qr_M2[0], qr_W0[0], qr_W1[0], qr_A_choice[0], qr_B_choice[0])
     qc.measure(qr_M2[0], c[5])
     qc.measure(qr_W0[0], c[6])
     qc.measure(qr_W1[0], c[7])
@@ -175,7 +175,7 @@ def build_circuit_guessing() -> QuantumCircuit:
     qc.measure(qr_SD[0], c[4])
 
     # Other measurements
-    qc.barrier(qr_SD, qr_SC, qr_M1, qr_M2, qr_G, qr_A_choice, qr_B_choice)
+    #qc.barrier(qr_SD, qr_SC, qr_M1, qr_M2, qr_G, qr_A_choice, qr_B_choice)
     qc.measure(qr_M2[0], c[5])
     qc.measure(qr_G[0], c[6])
 
@@ -243,7 +243,7 @@ def build_circuit_reflex() -> QuantumCircuit:
     qc.measure(qr_SD[0], c[4])
 
     # Other measurements
-    qc.barrier(qr_SD, qr_SC, qr_M, qr_L, qr_A_choice, qr_B_choice)
+    #qc.barrier(qr_SD, qr_SC, qr_M, qr_L, qr_A_choice, qr_B_choice)
     qc.measure(qr_L[0], c[5])
 
     return qc
