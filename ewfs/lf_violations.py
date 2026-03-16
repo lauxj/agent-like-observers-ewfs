@@ -31,7 +31,8 @@ def E(counts, A, B):
         if len(s) < 5:
             raise ValueError(f"Expected ≥5-bit key, got {s!r}")
 
-        c4, c3, c2, c1, c0 = s[0], s[1], s[2], s[3], s[4]
+        # Extract the LF-relevant bits (last five classical bits)
+        c4, c3, c2, c1, c0 = s[-5], s[-4], s[-3], s[-2], s[-1]
 
         if c1 == choice_c1 and c0 == choice_c0:
             den += n

@@ -25,7 +25,7 @@ def build_circuit_betting() -> QuantumCircuit:
     qr_B_choice = QuantumRegister(1, "Bchoice")
 
     # Classical register (joint counts)
-    c = ClassicalRegister(5, "c")
+    c = ClassicalRegister(8, "c")
 
     qc = QuantumCircuit(
         qr_SD, qr_SC, qr_M1, qr_M2, qr_W0, qr_W1, qr_A_choice, qr_B_choice,
@@ -96,6 +96,13 @@ def build_circuit_betting() -> QuantumCircuit:
     # Bob's measurement:
     qc.measure(qr_SD[0], c[4])
 
+    # other measurements
+    qc.barrier(qr_SC[0], qr_SD[0], qr_M1[0], qr_M2[0], qr_W0[0], qr_W1[0], qr_A_choice[0], qr_B_choice[0])
+    qc.measure(qr_M2[0], c[5])
+    qc.measure(qr_W0[0], c[6])
+    qc.measure(qr_W1[0], c[7])
+
+
     return qc
 
 
@@ -112,7 +119,7 @@ def build_circuit_guessing() -> QuantumCircuit:
     qr_B_choice = QuantumRegister(1, "Bchoice")
 
     # Classical register:
-    c = ClassicalRegister(5, "c")
+    c = ClassicalRegister(7, "c")
 
     qc = QuantumCircuit(
         qr_SD, qr_SC, qr_M1, qr_M2, qr_G, qr_A_choice, qr_B_choice,
@@ -167,6 +174,11 @@ def build_circuit_guessing() -> QuantumCircuit:
     qc.measure(qr_SC[0], c[3])
     qc.measure(qr_SD[0], c[4])
 
+    # Other measurements
+    qc.barrier(qr_SD, qr_SC, qr_M1, qr_M2, qr_G, qr_A_choice, qr_B_choice)
+    qc.measure(qr_M2[0], c[5])
+    qc.measure(qr_G[0], c[6])
+
     return qc
 
 
@@ -182,7 +194,7 @@ def build_circuit_reflex() -> QuantumCircuit:
     qr_B_choice = QuantumRegister(1, "Bchoice")
 
     # Classical register:
-    c = ClassicalRegister(5, "c")
+    c = ClassicalRegister(6, "c")
 
     qc = QuantumCircuit(
         qr_SD, qr_SC, qr_M, qr_L, qr_A_choice, qr_B_choice,
@@ -229,6 +241,10 @@ def build_circuit_reflex() -> QuantumCircuit:
     qc.measure(qr_M[0], c[2])
     qc.measure(qr_SC[0], c[3])
     qc.measure(qr_SD[0], c[4])
+
+    # Other measurements
+    qc.barrier(qr_SD, qr_SC, qr_M, qr_L, qr_A_choice, qr_B_choice)
+    qc.measure(qr_L[0], c[5])
 
     return qc
 
