@@ -250,5 +250,3 @@ def build_circuit_reflex() -> QuantumCircuit:
     qc.measure(qr_L[0], c[5])
 
     return qc
-
-#test for git
