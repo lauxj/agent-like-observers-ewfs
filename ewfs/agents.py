@@ -245,9 +245,10 @@ def build_circuit_reflex() -> QuantumCircuit:
     qc.measure(qr_SD[0], c[4])
 
     # Other measurements
-    # THIS BARRIER CAUSES AN ERROR ON IBM HARDWARE (error code: 6062)
+    # THIS BARRIER CAUSES AN ERROR ON IBM HARDWARE (error code: 6062).
     #qc.barrier(qr_SD, qr_SC, qr_M, qr_L, qr_A_choice, qr_B_choice)
     qc.measure(qr_L[0], c[5])
 
     return qc
 
+#test for git
