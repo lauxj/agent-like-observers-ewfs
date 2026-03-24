@@ -430,11 +430,20 @@ def load_lf_violations_for_run(run_dir: Path):
 
 def lf_correlator_series_from_saved_results(agent_lf_data):
     correlators = agent_lf_data["correlators"]
-    estimated_shots_per_setting = agent_lf_data["total_shots"] / 4.0
+    correlator_shots = agent_lf_data.get("correlator_shots")
+    if correlator_shots is None:
+        estimated_shots_per_setting = agent_lf_data["total_shots"] / 4.0
+        correlator_shots = {key: estimated_shots_per_setting for key in ["E11", "E12", "E21", "E22"]}
+
     return {
         key: {
             "value": correlators[key],
-            "stderr": np.sqrt(max(0.0, 1.0 - correlators[key] ** 2) / estimated_shots_per_setting),
+            "stderr": (
+                np.sqrt(max(0.0, 1.0 - correlators[key] ** 2) / correlator_shots[key])
+                if correlator_shots[key]
+                else 0.0
+            ),
+            "shots": int(correlator_shots[key]),
         }
         for key in ["E11", "E12", "E21", "E22"]
     }

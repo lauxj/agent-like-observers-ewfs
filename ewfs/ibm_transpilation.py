@@ -55,19 +55,19 @@ MANUAL_LAYOUTS_BY_BACKEND = {
     "ibm_kingston": {
         6: [37, 45, 46, 47, 10, 142],  # Reflex Agent
         7: [37, 45, 46, 44, 47, 10, 142],  # Guessing Agent
-        8: [37, 45, 46, 44, 47, 43, 10, 142],  # Betting Agent / Always 3/4 Agent
+        8: [38,49,50,48,51,47, 10, 142],  # Betting Agent / Always 3/4 Agent
     },
     "ibm_fez": {
         # Fill these physical qubit indices manually before running on Fez.
-        6: None,  # Reflex Agent
-        7: None,  # Guessing Agent
-        8: None,  # Betting Agent / Always 3/4 Agent
+        6: [37, 45, 46, 47, 10, 142],  # Reflex Agent
+        7: [37, 45, 46, 44, 47, 10, 142],  # Guessing Agent
+        8: [37, 45, 46, 44, 47, 43, 10, 142],  # Betting Agent / Always 3/4 Agent
     },
     "ibm_marrakesh": {
         # Fill these physical qubit indices manually before running on Marrakesh.
-        6: None,  # Reflex Agent
-        7: None,  # Guessing Agent
-        8: None,  # Betting Agent / Always 3/4 Agent
+        6: [37, 45, 46, 47, 10, 142],  # Reflex Agent
+        7: [37, 45, 46, 44, 47, 10, 142],  # Guessing Agent
+        8: [37, 45, 46, 44, 47, 43, 10, 142],  # Betting Agent / Always 3/4 Agent
     },
 }
 

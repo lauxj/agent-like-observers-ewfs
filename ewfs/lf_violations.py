@@ -17,7 +17,7 @@ def load(path, agent="Betting Agent"):
     return {k: int(v) for k, v in data["agents"][agent]["counts"].items()}
 
 
-def E(counts, A, B):
+def E_details(counts, A, B):
     # A in {1,2}: choose A1 (c2) or A2 (c3)
     # B in {1,2}: choose B1 (c1=0) or B2 (c1=1)
 
@@ -45,21 +45,30 @@ def E(counts, A, B):
     if den == 0:
         raise ValueError(f"No events with c1={choice_c1} and c0={choice_c0}")
 
-    return num / den
+    return {
+        "value": num / den,
+        "shots": int(den),
+    }
+
+
+def E(counts, A, B):
+    return E_details(counts, A, B)["value"]
+
+
+def correlator_details(counts):
+    """Return correlator values together with the exact shots used per setting."""
+    return {
+        "E11": E_details(counts, 1, 1),
+        "E12": E_details(counts, 1, 2),
+        "E21": E_details(counts, 2, 1),
+        "E22": E_details(counts, 2, 2),
+    }
 
 
 def correlators(counts):
     """Return all four correlators entering the LF expression."""
-    E11 = E(counts, 1, 1)
-    E12 = E(counts, 1, 2)
-    E21 = E(counts, 2, 1)
-    E22 = E(counts, 2, 2)
-    return {
-        "E11": E11,
-        "E12": E12,
-        "E21": E21,
-        "E22": E22,
-    }
+    details = correlator_details(counts)
+    return {key: value["value"] for key, value in details.items()}
 
 
 
@@ -70,12 +79,15 @@ def S(counts):
 
 def LF_violation_details(path, agent="Betting Agent"):
     counts = load(path, agent=agent)
-    corr = correlators(counts)
+    corr_details = correlator_details(counts)
+    corr = {key: value["value"] for key, value in corr_details.items()}
+    corr_shots = {key: value["shots"] for key, value in corr_details.items()}
     s_value = -corr["E11"] + corr["E12"] - corr["E21"] - corr["E22"] - 2
     total_shots = int(sum(counts.values()))
     return {
         "S": s_value,
         "correlators": corr,
+        "correlator_shots": corr_shots,
         "num_bitstrings": len(counts),
         "total_shots": total_shots,
         "violation": bool(s_value > 0),
