@@ -6,6 +6,8 @@ from typing import Optional, Tuple
 
 import matplotlib.pyplot as plt
 import numpy as np
+from matplotlib.lines import Line2D
+from matplotlib.patches import Patch
 
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -15,6 +17,7 @@ DATA_DIR_FAKE = PROJECT_ROOT / "data" / "data_fake_hardware"
 PLOTS_ROOT = PROJECT_ROOT / "results" / "plots" / "plots_agent_evaluation"
 
 IDEAL_COLOR = "#222222"
+THEORY_LINE_COLOR = "#C92A2A"
 PAYOFF_BY_WALLET_STATE = {
     "00": -3 / 4,
     "01": -1 / 4,
@@ -74,6 +77,12 @@ BACKEND_COLORS = {
     "Real hardware": "#2CA02C",
 }
 BACKEND_LABELS = ["Noiseless", "Fake hardware", "Real hardware"]
+BACKEND_DISPLAY_LABELS = {
+    "Noiseless": "Noiseless simulation",
+}
+BACKEND_AXIS_LABELS = {
+    "Noiseless": "Noiseless\nsimulation",
+}
 THEORY_COMPARISON_COLORS = {
     "Born-rule": "#9467BD",
     "Random": "#7F7F7F",
@@ -140,8 +149,81 @@ def result_value(results, label: str, key: str):
     return next(result[key] for result in results if result["label"] == label)
 
 
+def result_for_label(results, label: str):
+    return next(result for result in results if result["label"] == label)
+
+
 def backend_values(results, key: str):
     return [result_value(results, label, key) for label in BACKEND_LABELS]
+
+
+def prettify_backend_name(backend_name: Optional[str]) -> str:
+    if not backend_name:
+        return "IBM backend"
+
+    backend_name = str(backend_name)
+    if backend_name.startswith("ibm_"):
+        backend_name = backend_name[4:]
+
+    parts = [part.capitalize() for part in backend_name.split("_") if part]
+    if not parts:
+        return "IBM backend"
+
+    return "IBM " + " ".join(parts)
+
+
+def infer_backend_name(label: str, run_dir: Path, data: dict) -> Optional[str]:
+    if label == "Noiseless":
+        return None
+
+    backend_name = data.get("backend")
+    if backend_name:
+        return str(backend_name)
+
+    job_info_path = run_dir / "job_info.json"
+    if job_info_path.exists():
+        job_info = load_json(job_info_path)
+        backend_name = job_info.get("backend")
+        if backend_name:
+            return str(backend_name)
+
+    name_parts = run_dir.name.rsplit("_", 2)
+    if len(name_parts) == 3:
+        return name_parts[0]
+
+    return None
+
+
+def build_backend_display_label(label: str, backend_name: Optional[str]) -> str:
+    if label in BACKEND_DISPLAY_LABELS:
+        return BACKEND_DISPLAY_LABELS[label]
+
+    backend_title = prettify_backend_name(backend_name)
+    if label == "Fake hardware":
+        return f"{backend_title} noise simulation"
+    if label == "Real hardware":
+        return f"{backend_title} hardware"
+    return label
+
+
+def build_backend_axis_label(label: str, backend_name: Optional[str]) -> str:
+    if label in BACKEND_AXIS_LABELS:
+        return BACKEND_AXIS_LABELS[label]
+
+    backend_title = prettify_backend_name(backend_name)
+    if label == "Fake hardware":
+        return f"{backend_title}\nnoise simulation"
+    if label == "Real hardware":
+        return f"{backend_title}\nhardware"
+    return build_backend_display_label(label, backend_name)
+
+
+def result_display_label(result) -> str:
+    return result.get("display_label", build_backend_display_label(result["label"], result.get("backend_name")))
+
+
+def result_axis_label(result) -> str:
+    return result.get("axis_label", build_backend_axis_label(result["label"], result.get("backend_name")))
 
 
 def draw_zero_marker(ax, bar, color, height: float = 0.008):
@@ -287,6 +369,23 @@ def extract_reflex_accuracy(counts):
     )
 
 
+def extract_always_large_accuracy(counts):
+    wallet_counts = extract_wallet_counts(counts)
+    total_shots = sum(wallet_counts.values())
+    correct_shots = sum(
+        count for state, count in wallet_counts.items()
+        if np.isclose(STAKE_BY_WALLET_STATE[state], 3 / 4)
+    )
+    accuracy = (correct_shots / total_shots) if total_shots else 0.0
+    stderr = np.sqrt(accuracy * (1.0 - accuracy) / total_shots) if total_shots else 0.0
+    return {
+        "accuracy": accuracy,
+        "stderr": stderr,
+        "correct_shots": correct_shots,
+        "total_shots": total_shots,
+    }
+
+
 def expected_payoff_from_wallet_counts(wallet_counts):
     total_shots = sum(wallet_counts.values())
     if total_shots == 0:
@@ -306,6 +405,15 @@ def expected_payoff_stderr_from_wallet_counts(wallet_counts):
     mean_payoff = np.sum(probabilities * payoff_values)
     variance = np.sum(probabilities * (payoff_values - mean_payoff) ** 2)
     return np.sqrt(variance / total_shots)
+
+
+def payoff_stats_from_counts(counts):
+    wallet_counts = extract_wallet_counts(counts)
+    return {
+        "wallet_counts": wallet_counts,
+        "payoff": expected_payoff_from_wallet_counts(wallet_counts),
+        "payoff_stderr": expected_payoff_stderr_from_wallet_counts(wallet_counts),
+    }
 
 
 def load_json(path: Path):
@@ -332,8 +440,17 @@ def lf_correlator_series_from_saved_results(agent_lf_data):
     }
 
 
+def load_backend_lf_series(results, backend_label: str, agent_name: str):
+    run_dir = result_value(results, backend_label, "run_dir")
+    lf_results = load_lf_violations_for_run(run_dir)
+    return lf_correlator_series_from_saved_results(lf_results["agents"][agent_name])
+
+
 def agent_label_to_filename(agent_name: str) -> str:
-    return agent_name.lower().replace(" ", "_")
+    return "".join(
+        ch.lower() if ch.isalnum() or ch in {"-", "_"} else "_"
+        for ch in agent_name
+    ).strip("_")
 
 
 def theoretical_expected_payoff(win_probability, stake):
@@ -380,21 +497,34 @@ def load_backend_result(label: str, data_dir: Path, result_filename: str, run_na
     with open(result_path, "r", encoding="utf-8") as f:
         data = json.load(f)
 
-    counts = data["agents"]["Betting Agent"]["counts"]
-    wallet_counts = extract_wallet_counts(counts)
+    backend_name = infer_backend_name(label, run_dir, data)
+
+    betting_counts = data["agents"]["Betting Agent"]["counts"]
+    always_large_counts = data["agents"]["Always 3/4 Agent"]["counts"]
+    betting_payoff_stats = payoff_stats_from_counts(betting_counts)
+    always_large_payoff_stats = payoff_stats_from_counts(always_large_counts)
+    always_large_accuracy_stats = extract_always_large_accuracy(always_large_counts)
     guessing_counts = data["agents"]["Guessing Agent"]["counts"]
     reflex_counts = data["agents"]["Reflex Agent"]["counts"]
     guessing_stats = extract_guessing_accuracy(guessing_counts)
     reflex_stats = extract_reflex_accuracy(reflex_counts)
     return {
         "label": label,
+        "backend_name": backend_name,
+        "display_label": build_backend_display_label(label, backend_name),
+        "axis_label": build_backend_axis_label(label, backend_name),
         "run_dir": run_dir,
         "run_name": run_dir.name,
         "selection_mode": selection_mode,
         "source_result_path": result_path.resolve(),
-        "strategy_probabilities": extract_strategy_probabilities(counts),
-        "observed_payoff": expected_payoff_from_wallet_counts(wallet_counts),
-        "observed_payoff_stderr": expected_payoff_stderr_from_wallet_counts(wallet_counts),
+        "strategy_probabilities": extract_strategy_probabilities(betting_counts),
+        "observed_payoff": betting_payoff_stats["payoff"],
+        "observed_payoff_stderr": betting_payoff_stats["payoff_stderr"],
+        "always_large_observed_payoff": always_large_payoff_stats["payoff"],
+        "always_large_observed_payoff_stderr": always_large_payoff_stats["payoff_stderr"],
+        "always_large_accuracy": always_large_accuracy_stats["accuracy"],
+        "always_large_accuracy_stderr": always_large_accuracy_stats["stderr"],
+        "always_large_accuracy_shots": always_large_accuracy_stats["total_shots"],
         "guessing_accuracy": guessing_stats["accuracy"],
         "guessing_accuracy_stderr": guessing_stats["stderr"],
         "guessing_accuracy_shots": guessing_stats["total_shots"],
@@ -438,7 +568,7 @@ def plot_born_rule_accuracy(results, output_dir: Path) -> Path:
             capsize=5,
             ecolor="#333333",
             width=width,
-            label=result["label"],
+            label=result_display_label(result),
             color=BACKEND_COLORS[result["label"]],
             edgecolor="black",
             linewidth=1.0,
@@ -447,7 +577,7 @@ def plot_born_rule_accuracy(results, output_dir: Path) -> Path:
 
     ax.axhline(
         1.0,
-        color=IDEAL_COLOR,
+        color=THEORY_LINE_COLOR,
         linestyle="--",
         linewidth=1.8,
         label="Ideal Born-rule agent",
@@ -455,9 +585,13 @@ def plot_born_rule_accuracy(results, output_dir: Path) -> Path:
 
     ax.set_xticks(x)
     ax.set_xticklabels(categories)
-    ax.set_ylim(0.0, 1.05)
+    ax.set_ylim(0.0, 1.12)
     style_bar_axes(ax, "Born-Rule Agent Accuracy", "Accuracy")
-    ax.legend(loc="upper right", fontsize=10, frameon=True)
+    ax.legend(
+        loc="upper right",
+        fontsize=10,
+        frameon=True,
+    )
     fig.tight_layout()
 
     plot_path = output_dir / "born_rule_agent_accuracy_comparison.png"
@@ -469,39 +603,82 @@ def plot_born_rule_accuracy(results, output_dir: Path) -> Path:
 def plot_always_large_vs_betting_payoff_comparison(results, output_dir: Path) -> Path:
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    labels = [
-        "Born-rule\n(noiseless)",
-        "Born-rule\n(fake)",
-        "Born-rule\n(real)",
-        "Always 3/4",
-    ]
-    values = [*backend_values(results, "observed_payoff"), theory_payoff_for_policy("always_large")]
-    errors = [*backend_values(results, "observed_payoff_stderr"), 0.0]
-    x = np.arange(len(labels))
+    backend_labels = [result_axis_label(result_for_label(results, label)) for label in BACKEND_LABELS]
+    x = np.arange(len(backend_labels))
+    width = 0.34
 
-    fig, ax = plt.subplots(figsize=(8.4, 5.6))
-    bars = ax.bar(
-        x,
-        values,
-        yerr=errors,
-        capsize=5,
+    born_rule_values = backend_values(results, "observed_payoff")
+    born_rule_errors = backend_values(results, "observed_payoff_stderr")
+    always_large_values = backend_values(results, "always_large_observed_payoff")
+    always_large_errors = backend_values(results, "always_large_observed_payoff_stderr")
+    born_rule_theory = theory_payoff_for_policy("betting")
+    always_large_theory = theory_payoff_for_policy("always_large")
+
+    fig, ax = plt.subplots(figsize=(7.4, 4.8))
+    born_rule_bars = ax.bar(
+        x - width / 2,
+        born_rule_values,
+        yerr=born_rule_errors,
+        capsize=4,
         ecolor="#333333",
-        color=[
-            BACKEND_COLORS["Noiseless"],
-            BACKEND_COLORS["Fake hardware"],
-            BACKEND_COLORS["Real hardware"],
-            THEORY_COMPARISON_COLORS["Always 3/4"],
-        ],
+        width=width,
+        color=THEORY_COMPARISON_COLORS["Born-rule"],
         edgecolor="black",
         linewidth=1.0,
+        label="Born-rule agent",
     )
-    annotate_vertical_bars(ax, bars, values, errors=errors)
+    always_large_bars = ax.bar(
+        x + width / 2,
+        always_large_values,
+        yerr=always_large_errors,
+        capsize=4,
+        ecolor="#333333",
+        width=width,
+        color=THEORY_COMPARISON_COLORS["Always 3/4"],
+        edgecolor="black",
+        linewidth=1.0,
+        label="Always-3/4 agent",
+    )
+    annotate_vertical_bars(ax, born_rule_bars, born_rule_values, errors=born_rule_errors)
+    annotate_vertical_bars(ax, always_large_bars, always_large_values, errors=always_large_errors)
+
+    for bar in born_rule_bars:
+        ax.hlines(
+            y=born_rule_theory,
+            xmin=bar.get_x() + 0.04,
+            xmax=bar.get_x() + bar.get_width() - 0.04,
+            colors="#C92A2A",
+            linestyles="--",
+            linewidth=1.8,
+            zorder=4,
+        )
+    for bar in always_large_bars:
+        ax.hlines(
+            y=always_large_theory,
+            xmin=bar.get_x() + 0.04,
+            xmax=bar.get_x() + bar.get_width() - 0.04,
+            colors="#C92A2A",
+            linestyles="--",
+            linewidth=1.8,
+            zorder=4,
+        )
 
     ax.axhline(0.0, color=IDEAL_COLOR, linewidth=1.0)
     ax.set_xticks(x)
-    ax.set_xticklabels(labels)
-    ax.set_ylim(-0.33, 0.30)
-    style_bar_axes(ax, "Born-Rule Agent vs Always-3/4 Payoff", "Expected payoff")
+    ax.set_xticklabels(backend_labels)
+    ax.set_ylim(-0.33, 0.12)
+    style_bar_axes(ax, "Born-Rule vs Always-3/4 Payoff", "Expected payoff")
+    ax.legend(
+        handles=[
+            Patch(facecolor=THEORY_COMPARISON_COLORS["Born-rule"], edgecolor="black", label="Born-rule agent"),
+            Patch(facecolor=THEORY_COMPARISON_COLORS["Always 3/4"], edgecolor="black", label="Always-3/4 agent"),
+            Line2D([0], [0], color="#C92A2A", linestyle="--", linewidth=1.8, label="Theoretical value"),
+        ],
+        loc="upper right",
+        fontsize=9,
+        frameon=True,
+        ncol=1,
+    )
     fig.tight_layout()
 
     plot_path = output_dir / "betting_agent_vs_always_3_4_payoff_comparison.png"
@@ -510,27 +687,27 @@ def plot_always_large_vs_betting_payoff_comparison(results, output_dir: Path) ->
     return plot_path
 
 
-def plot_real_hardware_lf_correlator_comparisons(results, output_dir: Path):
+def plot_backend_lf_correlator_comparisons(results, output_dir: Path, backend_label: str):
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    real_run_dir = result_value(results, "Real hardware", "run_dir")
-    real_lf_results = load_lf_violations_for_run(real_run_dir)
+    backend_filename_prefix = backend_label.lower().replace(" ", "_")
+    backend_title_prefix = result_display_label(result_for_label(results, backend_label))
 
     saved_paths = []
     classical_bound = 2.0
     tsirelson_bound = 2.0 * np.sqrt(2.0)
+    violation_offset = -classical_bound
+    tsirelson_violation = tsirelson_bound - classical_bound
 
     for agent_name in LF_AGENT_NAMES:
-        real_series = lf_correlator_series_from_saved_results(real_lf_results["agents"][agent_name])
+        backend_series = load_backend_lf_series(results, backend_label, agent_name)
 
-        raw_values = np.array([real_series[key]["value"] for key, _, _ in LF_TERM_SPECS])
-        raw_errors = np.array([2.0 * real_series[key]["stderr"] for key, _, _ in LF_TERM_SPECS])
+        raw_values = np.array([backend_series[key]["value"] for key, _, _ in LF_TERM_SPECS])
+        raw_errors = np.array([backend_series[key]["stderr"] for key, _, _ in LF_TERM_SPECS])
         raw_theory_values = np.array([LF_ANALYTIC_CORRELATORS[key] for key, _, _ in LF_TERM_SPECS])
-        signed_term_values = np.array([sign * real_series[key]["value"] for key, sign, _ in LF_TERM_SPECS])
-        signed_term_errors = np.array([2.0 * real_series[key]["stderr"] for key, _, _ in LF_TERM_SPECS])
+        signed_term_values = np.array([sign * backend_series[key]["value"] for key, sign, _ in LF_TERM_SPECS])
+        signed_term_errors = np.array([backend_series[key]["stderr"] for key, _, _ in LF_TERM_SPECS])
         signed_term_theory_values = np.array([sign * LF_ANALYTIC_CORRELATORS[key] for key, sign, _ in LF_TERM_SPECS])
-        signed_term_labels = [label for _, _, label in LF_TERM_SPECS]
-
         fig, (ax1, ax2) = plt.subplots(
             2,
             1,
@@ -583,23 +760,22 @@ def plot_real_hardware_lf_correlator_comparisons(results, output_dir: Path):
         ax1.set_ylabel("Correlator value")
         ax1.axhline(0, color="black", linewidth=0.8, zorder=1)
         ax1.grid(axis="y", alpha=0.25)
-        ax1.set_title(f"{agent_name}: Real-Hardware Raw LF Correlators")
+        ax1.set_title(f"{agent_name}: {backend_title_prefix} LF Correlators")
         ax1.plot([], [], color="red", linestyle="--", linewidth=2, label="Theoretical quantum maximum")
-        ax1.plot([], [], color="black", linewidth=1.5, marker="|", markersize=10, label=r"$2\sigma$ uncertainty")
+        ax1.plot([], [], color="black", linewidth=1.5, marker="|", markersize=10, label=r"$1\sigma$ uncertainty")
         ax1.legend(loc="upper right", fontsize=10, frameon=True)
 
-        left_exp = 0.0
-        left_th = 0.0
+        left_exp = violation_offset
+        left_th = violation_offset
         bar_height = 0.5
         cumulative_centers = []
         cumulative_errors = []
         cumulative_variance = 0.0
-        segment_label_y = bar_height / 2 + 0.18
 
-        for idx, label in enumerate(signed_term_labels):
+        for idx in range(len(LF_TERM_SPECS)):
             width_exp = abs(signed_term_values[idx])
             width_th = abs(signed_term_theory_values[idx])
-            term_two_sigma = signed_term_errors[idx]
+            term_sigma = signed_term_errors[idx]
 
             ax2.barh(
                 0,
@@ -621,23 +797,12 @@ def plot_real_hardware_lf_correlator_comparisons(results, output_dir: Path):
                 linewidth=1.5,
                 zorder=3,
             )
-            ax2.text(
-                left_exp + (width_exp / 2),
-                segment_label_y,
-                label,
-                ha="center",
-                va="bottom",
-                fontsize=10,
-                zorder=6,
-                bbox={"facecolor": "white", "edgecolor": "none", "alpha": 0.9, "pad": 1.2},
-            )
             left_exp += width_exp
             left_th += width_th
 
-            term_sigma = term_two_sigma / 2.0
             cumulative_variance += term_sigma ** 2
             cumulative_centers.append(left_exp)
-            cumulative_errors.append(2.0 * np.sqrt(cumulative_variance))
+            cumulative_errors.append(np.sqrt(cumulative_variance))
 
         ax2.errorbar(
             cumulative_centers,
@@ -653,7 +818,7 @@ def plot_real_hardware_lf_correlator_comparisons(results, output_dir: Path):
 
         threshold_ymin = 0.0
         threshold_ymax = 0.92
-        for threshold in [classical_bound, tsirelson_bound]:
+        for threshold in [0.0, tsirelson_violation]:
             ax2.axvline(
                 x=threshold,
                 color="red",
@@ -663,32 +828,283 @@ def plot_real_hardware_lf_correlator_comparisons(results, output_dir: Path):
                 zorder=5,
             )
 
-        final_two_sigma = cumulative_errors[-1]
+        final_sigma = cumulative_errors[-1]
         final_violation = float(np.sum(signed_term_values)) - classical_bound
-        final_text_x = cumulative_centers[-1] + final_two_sigma / 2.0 + 0.08
+        final_text_x = cumulative_centers[-1] + final_sigma / 2.0 + 0.08
         ax2.text(
             final_text_x,
             0.0,
-            f"S = {final_violation:.3f}\n± {final_two_sigma:.3f}",
+            f"S = {final_violation:.3f}\n± {final_sigma:.3f}",
             ha="left",
             va="center",
             fontsize=10,
+            zorder=7,
+            bbox={"facecolor": "white", "edgecolor": "none", "alpha": 0.9, "pad": 1.5},
         )
 
-        right_limit = max(tsirelson_bound + 0.12, final_text_x + 0.42)
-        ax2.set_xlim(0, right_limit)
+        right_limit = max(tsirelson_violation + 0.12, final_text_x + 0.42)
+        ax2.set_xlim(violation_offset, right_limit)
         ax2.set_ylim(-1, 1)
         ax2.set_yticks([])
         for spine in ["top", "left", "right"]:
             ax2.spines[spine].set_visible(False)
 
-        ax2.set_xticks([0, classical_bound, tsirelson_bound])
-        ax2.set_xticklabels(["0", "2", r"$2\sqrt{2}$"], fontsize=12)
+        ax2.set_xticks([violation_offset, 0.0, tsirelson_violation])
+        ax2.set_xticklabels(["-2", "0", r"$2\sqrt{2}-2$"], fontsize=12)
         ax2.spines["bottom"].set_linewidth(1.5)
 
         fig.subplots_adjust(left=0.10, right=0.97, top=0.92, bottom=0.12, hspace=0.18)
 
-        plot_path = output_dir / f"real_hardware_{agent_label_to_filename(agent_name)}_lf_correlator_comparison.png"
+        plot_path = output_dir / f"{backend_filename_prefix}_{agent_label_to_filename(agent_name)}_lf_correlator_comparison.png"
+        fig.savefig(plot_path, dpi=300, bbox_inches="tight")
+        plt.close(fig)
+        saved_paths.append(plot_path)
+
+    return saved_paths
+
+
+def plot_hardware_lf_comparison_per_agent(results, output_dir: Path):
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    saved_paths = []
+    classical_bound = 2.0
+    tsirelson_bound = 2.0 * np.sqrt(2.0)
+    violation_offset = -classical_bound
+    tsirelson_violation = tsirelson_bound - classical_bound
+    fake_result = result_for_label(results, "Fake hardware")
+    real_result = result_for_label(results, "Real hardware")
+    fake_label = result_display_label(fake_result)
+    real_label = result_display_label(real_result)
+
+    for agent_name in LF_AGENT_NAMES:
+        noiseless_series = load_backend_lf_series(results, "Noiseless", agent_name)
+        fake_series = load_backend_lf_series(results, "Fake hardware", agent_name)
+        real_series = load_backend_lf_series(results, "Real hardware", agent_name)
+
+        x_pos = np.arange(len(LF_TERM_SPECS))
+        fake_values = np.array([fake_series[key]["value"] for key, _, _ in LF_TERM_SPECS])
+        fake_errors = np.array([fake_series[key]["stderr"] for key, _, _ in LF_TERM_SPECS])
+        real_values = np.array([real_series[key]["value"] for key, _, _ in LF_TERM_SPECS])
+        real_errors = np.array([real_series[key]["stderr"] for key, _, _ in LF_TERM_SPECS])
+        noiseless_values = np.array([noiseless_series[key]["value"] for key, _, _ in LF_TERM_SPECS])
+
+        signed_fake_values = np.array([sign * fake_series[key]["value"] for key, sign, _ in LF_TERM_SPECS])
+        signed_fake_errors = np.array([fake_series[key]["stderr"] for key, _, _ in LF_TERM_SPECS])
+        signed_real_values = np.array([sign * real_series[key]["value"] for key, sign, _ in LF_TERM_SPECS])
+        signed_real_errors = np.array([real_series[key]["stderr"] for key, _, _ in LF_TERM_SPECS])
+        signed_noiseless_values = np.array([sign * noiseless_series[key]["value"] for key, sign, _ in LF_TERM_SPECS])
+        signed_term_labels = [label for _, _, label in LF_TERM_SPECS]
+
+        fig, (ax1, ax2) = plt.subplots(
+            2,
+            1,
+            figsize=(10, 7.4),
+            gridspec_kw={"height_ratios": [2.5, 1.3], "hspace": 0.18},
+        )
+
+        outline_width = 0.78
+        bar_width = 0.26
+        fake_offset = -0.16
+        real_offset = 0.16
+
+        for idx in range(len(LF_TERM_SPECS)):
+            ax1.bar(
+                x_pos[idx] + fake_offset,
+                fake_values[idx],
+                width=bar_width,
+                color=LF_TERM_COLORS[idx],
+                edgecolor="black",
+                linestyle="--",
+                yerr=fake_errors[idx],
+                capsize=5,
+                linewidth=1.4,
+                zorder=2,
+            )
+            ax1.bar(
+                x_pos[idx] + real_offset,
+                real_values[idx],
+                width=bar_width,
+                color=LF_TERM_COLORS[idx],
+                edgecolor="black",
+                yerr=real_errors[idx],
+                capsize=5,
+                linewidth=1.0,
+                zorder=2,
+            )
+            ax1.bar(
+                x_pos[idx],
+                noiseless_values[idx],
+                width=outline_width,
+                fill=False,
+                edgecolor="red",
+                linestyle="--",
+                linewidth=2,
+                zorder=3,
+            )
+
+            fake_positive_reference = max(fake_values[idx] + fake_errors[idx], noiseless_values[idx])
+            fake_negative_reference = min(fake_values[idx] - fake_errors[idx], noiseless_values[idx])
+            fake_text_y = fake_positive_reference + 0.07 if fake_values[idx] >= 0 else fake_negative_reference - 0.07
+            ax1.text(
+                x_pos[idx] + fake_offset,
+                fake_text_y,
+                f"{fake_values[idx]:.3f}",
+                ha="center",
+                va="bottom" if fake_values[idx] >= 0 else "top",
+                fontsize=8,
+                zorder=5,
+            )
+
+            real_positive_reference = max(real_values[idx] + real_errors[idx], noiseless_values[idx])
+            real_negative_reference = min(real_values[idx] - real_errors[idx], noiseless_values[idx])
+            real_text_y = real_positive_reference + 0.07 if real_values[idx] >= 0 else real_negative_reference - 0.07
+            ax1.text(
+                x_pos[idx] + real_offset,
+                real_text_y,
+                f"{real_values[idx]:.3f}",
+                ha="center",
+                va="bottom" if real_values[idx] >= 0 else "top",
+                fontsize=8,
+                zorder=5,
+            )
+
+        ax1.set_xticks(x_pos)
+        ax1.set_xticklabels(LF_CORRELATOR_LABELS, fontsize=12)
+        ax1.set_xlim(-0.8, len(LF_TERM_SPECS) - 0.2)
+        ax1.set_ylim(-1.05, 1.05)
+        ax1.set_ylabel("Correlator value")
+        ax1.axhline(0, color="black", linewidth=0.8, zorder=1)
+        ax1.grid(axis="y", alpha=0.25)
+        ax1.set_title(f"{agent_name}: {fake_label} vs {real_label} LF Correlators")
+        hardware_handles = [
+            Patch(facecolor="white", edgecolor="black", linewidth=1.0, label=real_label),
+            Patch(facecolor="white", edgecolor="black", linewidth=1.4, linestyle="--", label=fake_label),
+            Line2D([], [], color="red", linestyle="--", linewidth=2, label="Noiseless simulation"),
+            Line2D([], [], color="black", linewidth=1.5, marker="|", markersize=10, label=r"$1\sigma$ uncertainty"),
+        ]
+        ax1.legend(handles=hardware_handles, loc="upper right", fontsize=10, frameon=True)
+
+        row_specs = [
+            (fake_label, 0.22, signed_fake_values, signed_fake_errors),
+            (real_label, -0.22, signed_real_values, signed_real_errors),
+        ]
+        bar_height = 0.26
+        max_right_limit = tsirelson_violation + 0.12
+
+        for row_index, (row_label, y_pos, signed_values, signed_errors) in enumerate(row_specs):
+            left_exp = violation_offset
+            left_th = violation_offset
+            cumulative_centers = []
+            cumulative_errors = []
+            cumulative_variance = 0.0
+
+            for idx, label in enumerate(signed_term_labels):
+                width_exp = abs(signed_values[idx])
+                width_th = abs(signed_noiseless_values[idx])
+
+                ax2.barh(
+                    y_pos,
+                    width_exp,
+                    height=bar_height,
+                    left=left_exp,
+                    color=LF_TERM_COLORS[idx],
+                    edgecolor="none",
+                    zorder=2,
+                )
+                ax2.barh(
+                    y_pos,
+                    width_th,
+                    height=bar_height + 0.05,
+                    left=left_th,
+                    fill=False,
+                    edgecolor="red",
+                    linestyle="--",
+                    linewidth=1.5,
+                    zorder=3,
+                )
+                left_exp += width_exp
+                left_th += width_th
+                cumulative_variance += signed_errors[idx] ** 2
+                cumulative_centers.append(left_exp)
+                cumulative_errors.append(np.sqrt(cumulative_variance))
+
+            ax2.errorbar(
+                cumulative_centers,
+                [y_pos] * len(cumulative_centers),
+                xerr=[err / 2.0 for err in cumulative_errors],
+                fmt="none",
+                ecolor="black",
+                elinewidth=1.5,
+                capsize=4,
+                capthick=1.5,
+                zorder=4,
+            )
+
+            final_sigma = cumulative_errors[-1]
+            final_violation = float(np.sum(signed_values)) - classical_bound
+            final_text_x = cumulative_centers[-1] + final_sigma / 2.0 + 0.08
+            ax2.text(
+                final_text_x,
+                y_pos,
+                f"S = {final_violation:.3f}\n± {final_sigma:.3f}",
+                ha="left",
+                va="center",
+                fontsize=9,
+                zorder=7,
+                bbox={"facecolor": "white", "edgecolor": "none", "alpha": 0.9, "pad": 1.5},
+            )
+            max_right_limit = max(max_right_limit, final_text_x + 0.40)
+
+        threshold_ymin = 0.0
+        threshold_ymax = 0.94
+        for threshold in [0.0, tsirelson_violation]:
+            ax2.axvline(
+                x=threshold,
+                color="red",
+                linewidth=2.2,
+                ymin=threshold_ymin,
+                ymax=threshold_ymax,
+                zorder=5,
+            )
+
+        ax2.set_xlim(violation_offset, max_right_limit)
+        ax2.set_ylim(-0.55, 0.55)
+        ax2.set_yticks([])
+        ax2.text(
+            -0.06,
+            0.22,
+            "Noise\nsimulation",
+            transform=ax2.get_yaxis_transform(),
+            ha="center",
+            va="center",
+            fontsize=9,
+            multialignment="center",
+            clip_on=False,
+            zorder=7,
+            bbox={"facecolor": "white", "edgecolor": "none", "alpha": 0.9, "pad": 1.2},
+        )
+        ax2.text(
+            -0.06,
+            -0.22,
+            "Hardware",
+            transform=ax2.get_yaxis_transform(),
+            ha="center",
+            va="center",
+            fontsize=9,
+            clip_on=False,
+            zorder=7,
+            bbox={"facecolor": "white", "edgecolor": "none", "alpha": 0.9, "pad": 1.2},
+        )
+        for spine in ["top", "right"]:
+            ax2.spines[spine].set_visible(False)
+        ax2.spines["left"].set_visible(False)
+        ax2.set_xticks([violation_offset, 0.0, tsirelson_violation])
+        ax2.set_xticklabels(["-2", "0", r"$2\sqrt{2}-2$"], fontsize=12)
+        ax2.spines["bottom"].set_linewidth(1.5)
+
+        fig.subplots_adjust(left=0.22, right=0.97, top=0.92, bottom=0.10, hspace=0.18)
+
+        plot_path = output_dir / f"hardware_comparison_{agent_label_to_filename(agent_name)}_lf_correlator_comparison.png"
         fig.savefig(plot_path, dpi=300, bbox_inches="tight")
         plt.close(fig)
         saved_paths.append(plot_path)
@@ -713,6 +1129,7 @@ def plot_accuracy_comparison(
     values = backend_values(results, value_key)
     errors = backend_values(results, error_key)
     x = np.arange(len(BACKEND_LABELS))
+    y_max = 1.12 if np.isclose(ideal_value, 1.0) else 1.05
 
     fig, ax = plt.subplots(figsize=(9.2, 5.6))
     bars = ax.bar(
@@ -729,16 +1146,20 @@ def plot_accuracy_comparison(
 
     ax.axhline(
         ideal_value,
-        color=IDEAL_COLOR,
+        color=THEORY_LINE_COLOR,
         linestyle="--",
         linewidth=1.8,
         label=ideal_label,
     )
     ax.set_xticks(x)
-    ax.set_xticklabels(BACKEND_LABELS)
-    ax.set_ylim(0.0, 1.05)
+    ax.set_xticklabels([result_axis_label(result_for_label(results, label)) for label in BACKEND_LABELS])
+    ax.set_ylim(0.0, y_max)
     style_bar_axes(ax, title, ylabel)
-    ax.legend(loc="upper right", fontsize=10, frameon=True)
+    ax.legend(
+        loc="upper right",
+        fontsize=10,
+        frameon=True,
+    )
     fig.tight_layout()
 
     plot_path = output_dir / filename
@@ -775,13 +1196,32 @@ def plot_reflex_accuracy(results, output_dir: Path) -> Path:
     )
 
 
+def plot_always_large_accuracy(results, output_dir: Path) -> Path:
+    return plot_accuracy_comparison(
+        results,
+        output_dir,
+        value_key="always_large_accuracy",
+        error_key="always_large_accuracy_stderr",
+        title="Always-3/4 Agent Accuracy",
+        ylabel="Always-3/4 accuracy",
+        ideal_value=1.0,
+        ideal_label="Ideal accuracy = 1.0",
+        filename="always_3_4_agent_accuracy_comparison.png",
+    )
+
+
 def print_payoff_summary(results):
     print("\nExpected payoff comparison:")
     for result in results:
-        print(f"  Betting agent ({result['label']}): {result['observed_payoff']:.4f}")
+        print(
+            f"  {result_display_label(result)}: "
+            f"Born-rule={result['observed_payoff']:.4f}, "
+            f"Always-3/4={result['always_large_observed_payoff']:.4f}"
+        )
     print(f"  Random agent (theory): {theory_payoff_for_policy('random'):.4f}")
     print(f"  Opposite agent (theory): {theory_payoff_for_policy('opposite'):.4f}")
     print(f"  Always-1/4 agent (theory): {theory_payoff_for_policy('always_small'):.4f}")
+    print(f"  Born-rule agent (theory): {theory_payoff_for_policy('betting'):.4f}")
     print(f"  Always-3/4 agent (theory): {theory_payoff_for_policy('always_large'):.4f}")
 
 
@@ -789,7 +1229,7 @@ def print_guessing_summary(results):
     print("\nGuessing agent accuracy:")
     for result in results:
         print(
-            f"  {result['label']}: {result['guessing_accuracy']:.4f} "
+            f"  {result_display_label(result)}: {result['guessing_accuracy']:.4f} "
             f"+/- {result['guessing_accuracy_stderr']:.4f} "
             f"(n={result['guessing_accuracy_shots']})"
         )
@@ -799,9 +1239,19 @@ def print_reflex_summary(results):
     print("\nReflex agent accuracy:")
     for result in results:
         print(
-            f"  {result['label']}: {result['reflex_accuracy']:.4f} "
+            f"  {result_display_label(result)}: {result['reflex_accuracy']:.4f} "
             f"+/- {result['reflex_accuracy_stderr']:.4f} "
             f"(n={result['reflex_accuracy_shots']})"
+        )
+
+
+def print_always_large_summary(results):
+    print("\nAlways-3/4 agent accuracy:")
+    for result in results:
+        print(
+            f"  {result_display_label(result)}: {result['always_large_accuracy']:.4f} "
+            f"+/- {result['always_large_accuracy_stderr']:.4f} "
+            f"(n={result['always_large_accuracy_shots']})"
         )
 
 
@@ -824,18 +1274,26 @@ def main():
     output_dir = build_output_dir(args.label)
     born_rule_accuracy_plot_path = plot_born_rule_accuracy(results, output_dir)
     always_large_vs_betting_plot_path = plot_always_large_vs_betting_payoff_comparison(results, output_dir)
-    lf_correlator_plot_paths = plot_real_hardware_lf_correlator_comparisons(results, output_dir)
+    lf_correlator_plot_paths = []
+    lf_correlator_plot_paths.extend(plot_backend_lf_correlator_comparisons(results, output_dir, "Real hardware"))
+    lf_correlator_plot_paths.extend(plot_backend_lf_correlator_comparisons(results, output_dir, "Fake hardware"))
+    hardware_comparison_lf_plot_paths = plot_hardware_lf_comparison_per_agent(results, output_dir)
     guessing_plot_path = plot_guessing_accuracy(results, output_dir)
     reflex_plot_path = plot_reflex_accuracy(results, output_dir)
+    always_large_accuracy_plot_path = plot_always_large_accuracy(results, output_dir)
     print_payoff_summary(results)
     print_guessing_summary(results)
     print_reflex_summary(results)
+    print_always_large_summary(results)
     print(f"Saved Born-rule accuracy plot to: {born_rule_accuracy_plot_path}")
     print(f"Saved betting-vs-always-3/4 payoff comparison plot to: {always_large_vs_betting_plot_path}")
     for plot_path in lf_correlator_plot_paths:
-        print(f"Saved real-hardware LF correlator plot to: {plot_path}")
+        print(f"Saved backend LF correlator plot to: {plot_path}")
+    for plot_path in hardware_comparison_lf_plot_paths:
+        print(f"Saved combined hardware LF correlator plot to: {plot_path}")
     print(f"Saved guessing accuracy plot to: {guessing_plot_path}")
     print(f"Saved reflex accuracy plot to: {reflex_plot_path}")
+    print(f"Saved always-3/4 accuracy plot to: {always_large_accuracy_plot_path}")
 
 
 if __name__ == "__main__":

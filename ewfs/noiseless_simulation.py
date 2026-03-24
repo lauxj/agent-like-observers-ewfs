@@ -10,12 +10,26 @@ import json
 from datetime import datetime
 
 # Agent circuits import (ewfs/agents/agents.py)
-from ewfs.agents import build_circuit_reflex, build_circuit_guessing, build_circuit_betting
+try:
+    from ewfs.agents import (
+        build_circuit_reflex,
+        build_circuit_guessing,
+        build_circuit_betting,
+        build_circuit_always_large,
+    )
+except ModuleNotFoundError:
+    from agents import (
+        build_circuit_reflex,
+        build_circuit_guessing,
+        build_circuit_betting,
+        build_circuit_always_large,
+    )
 
 AGENTS = [
     ("Reflex Agent", build_circuit_reflex),
     ("Guessing Agent", build_circuit_guessing),
     ("Betting Agent", build_circuit_betting),
+    ("Always 3/4 Agent", build_circuit_always_large),
 ]
 
 # Simulator:
@@ -32,6 +46,10 @@ DATA_DIR.mkdir(parents=True, exist_ok=True)
 # Where to save noiseless circuit plots
 RESULTS_DIR = project_root / "results" / "plots" / "plots_noiseless_simulation"
 RESULTS_DIR.mkdir(parents=True, exist_ok=True)
+
+
+def safe_label(label: str) -> str:
+    return "".join(ch if ch.isalnum() or ch in {"-", "_"} else "_" for ch in label).strip("_")
 
 
 def run_noiseless_simulation(shots=10000, save=True, make_plots=True):
@@ -73,11 +91,12 @@ def run_noiseless_simulation(shots=10000, save=True, make_plots=True):
         }
 
         if make_plots:
-            agent_folder = plots_dir / name.replace(" ", "_")
+            safe_name = safe_label(name)
+            agent_folder = plots_dir / safe_name
             agent_folder.mkdir(parents=True, exist_ok=True)
             fig = qc.draw(output="mpl", fold=-1)
             fig.suptitle(f"{name} – Quantum Circuit", fontsize=14)
-            filename = f"{name.replace(' ', '_')}_circuit.png"
+            filename = f"{safe_name}_circuit.png"
             fig.savefig(agent_folder / filename, dpi=300, bbox_inches="tight")
             plt.close(fig)
 

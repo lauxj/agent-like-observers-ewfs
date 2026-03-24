@@ -10,12 +10,16 @@ from datetime import datetime
 import pickle
 from qiskit_ibm_runtime import SamplerV2 as Sampler
 from qiskit_ibm_runtime import QiskitRuntimeService
-from ibm_transpilation import transpile_all_agents, PLOT_DIR as IBM_TRANSPILATION_PLOT_DIR
+try:
+    from .ibm_transpilation import transpile_all_agents, PLOT_DIR as IBM_TRANSPILATION_PLOT_DIR
+except ImportError:
+    from ibm_transpilation import transpile_all_agents, PLOT_DIR as IBM_TRANSPILATION_PLOT_DIR
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 DATA_DIR_REAL = PROJECT_ROOT / "data" / "data_real_hardware"
 DATA_DIR_REAL.mkdir(parents=True, exist_ok=True)
+BACKEND_NAME = "ibm_torino"
 
 
 def make_run_folder_name(backend, folder_ts=None):
@@ -132,6 +136,7 @@ def save_hardware_results(job, results, meta_info, backend, shots, transpiled_by
 
     run_data = {
         "agents": {},
+        "backend": backend.name,
         "kind": "real_hardware_run",
         "shots": int(shots),
         "timestamp": datetime.now().strftime("%Y-%m-%dT%H:%M:%S"),
@@ -152,6 +157,7 @@ def save_hardware_results(job, results, meta_info, backend, shots, transpiled_by
         pickle.dump(results, f)
 
     print(f"Saved real-hardware data to: {results_dir.resolve()}")
+    return results_dir
 
 
 def prepare_real_hardware_run(backend, save_plots=True, folder_ts=None):
@@ -174,7 +180,7 @@ def run_real_hardware_for_backend(backend, transpiled_by_agent, shots=300, folde
         backend=backend,
         shots=shots,
     )
-    save_hardware_results(
+    return save_hardware_results(
         job=job,
         results=results,
         meta_info=meta_info,
@@ -186,7 +192,7 @@ def run_real_hardware_for_backend(backend, transpiled_by_agent, shots=300, folde
 
 
 if __name__ == "__main__":
-    backend = QiskitRuntimeService().backend("ibm_torino")
+    backend = QiskitRuntimeService().backend(BACKEND_NAME)
     transpiled, folder_ts = prepare_real_hardware_run(backend, save_plots=True)
     run_real_hardware_for_backend(
         backend,

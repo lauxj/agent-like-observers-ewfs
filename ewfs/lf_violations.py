@@ -100,7 +100,7 @@ def save_json(path: Path, obj):
 def save_lf_violations_for_run(path, agent_names=None):
     """Compute LF violations for one run file and save them into the same run folder."""
     if agent_names is None:
-        agent_names = ["Betting Agent", "Guessing Agent", "Reflex Agent"]
+        agent_names = ["Betting Agent", "Guessing Agent", "Reflex Agent", "Always 3/4 Agent"]
 
     run_path = Path(path)
     results = {

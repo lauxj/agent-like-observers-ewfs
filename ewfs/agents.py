@@ -107,6 +107,101 @@ def build_circuit_betting() -> QuantumCircuit:
     return qc
 
 
+def build_circuit_always_large() -> QuantumCircuit:
+    """Always-3/4 agent circuit builder."""
+
+    # Quantum registers
+    qr_SD = QuantumRegister(1, "SD")
+    qr_SC = QuantumRegister(1, "SC")
+    qr_M1 = QuantumRegister(1, "M1")
+    qr_M2 = QuantumRegister(1, "M2")
+    qr_W0 = QuantumRegister(1, "W0")
+    qr_W1 = QuantumRegister(1, "W1")
+    qr_A_choice = QuantumRegister(1, "Achoice")
+    qr_B_choice = QuantumRegister(1, "Bchoice")
+
+    # Classical register (joint counts)
+    c = ClassicalRegister(8, "c")
+
+    qc = QuantumCircuit(
+        qr_SD, qr_SC, qr_M1, qr_M2, qr_W0, qr_W1, qr_A_choice, qr_B_choice,
+        c,
+        name="always_large_agent",
+    )
+
+    # Initialization
+    # Create entangled pair between both labs:
+    qc.h(qr_SC[0])
+    qc.cx(qr_SC[0], qr_SD[0])
+    # Wallet initialization:
+    qc.x(qr_W0[0])
+
+
+    # Charlie's gates
+    # Charlie's 1st measurement (c):
+    qc.barrier(qr_SC[0], qr_SD[0], qr_M1[0], qr_M2[0], qr_W0[0], qr_W1[0], qr_A_choice[0], qr_B_choice[0])
+    qc.cx(qr_SC[0], qr_M1[0])
+
+    # Charlie's wallet update:
+    qc.barrier(qr_SC[0], qr_SD[0], qr_M1[0], qr_M2[0], qr_W0[0], qr_W1[0], qr_A_choice[0], qr_B_choice[0])
+    qc.x(qr_W0[0]) # Charlie always places the 3/4 bet
+
+    # Charlie's 2nd measurement in rotated basis:
+    qc.barrier(qr_SC[0], qr_SD[0], qr_M1[0], qr_M2[0], qr_W0[0], qr_W1[0], qr_A_choice[0], qr_B_choice[0])
+    qc.ry(np.pi / 3, qr_SC[0]) # Rotation on system for second measurement of Charlie
+    qc.cx(qr_SC[0], qr_M2[0]) # Charlie's second measurement on rotated system
+
+    # Charlie's wallet update:
+    qc.barrier(qr_SC[0], qr_SD[0], qr_M1[0], qr_M2[0], qr_W0[0], qr_W1[0], qr_A_choice[0], qr_B_choice[0])
+    qc.cx(qr_M2[0], qr_W1[0]) # Wallet update based on outcome of second measurement
+
+
+    # Alice's and Bob's choice (x adn y):
+    qc.barrier(qr_SC[0], qr_SD[0], qr_M1[0], qr_M2[0], qr_W0[0], qr_W1[0], qr_A_choice[0], qr_B_choice[0])
+    qc.h(qr_A_choice[0])
+    qc.measure(qr_A_choice[0], c[0])
+    qc.h(qr_B_choice[0])
+    qc.measure(qr_B_choice[0], c[1])
+
+
+    # Conditional gates
+    # Conditional block for setting A2 (Undo and measure system):
+    qc.barrier(qr_SC[0], qr_SD[0], qr_M1[0], qr_M2[0], qr_W0[0], qr_W1[0], qr_A_choice[0], qr_B_choice[0])
+    with qc.if_test((c[0], 1)):
+        qc.cx(qr_M2[0], qr_W1[0])
+        qc.cx(qr_SC[0], qr_M2[0])
+        qc.ry(-np.pi / 3, qr_SC[0])
+        qc.x(qr_W0[0])
+        qc.cx(qr_SC[0], qr_M1[0])
+        qc.x(qr_W0[0])
+        qc.ry(alpha, qr_SC[0])
+
+    # Conditional block for setting B1:
+    with qc.if_test((c[1], 0)): # setting B=1
+        qc.ry(beta1, qr_SD[0])
+    # Conditional setting for setting B2:
+    with qc.if_test((c[1], 1)): # setting B=2
+        qc.ry(beta2, qr_SD[0])
+
+
+    # Alice and Bob's measurements (a and b):
+    # Alice's measurement(s):
+    qc.barrier(qr_SC[0], qr_SD[0], qr_M1[0], qr_M2[0], qr_W0[0], qr_W1[0], qr_A_choice[0], qr_B_choice[0])
+    qc.measure(qr_M1[0], c[2]) # Alice measurement for setting A1 (ask Charlie)
+    qc.measure(qr_SC[0], c[3]) # Alice measurement for setting A2 (Undo)
+    qc.measure(qr_SD[0], c[4])
+
+    # other measurements
+    # THIS BARRIER CAUSES AN ERROR ON IBM HARDWARE (error code: 6062)
+    #qc.barrier(qr_SC[0], qr_SD[0], qr_M1[0], qr_M2[0], qr_W0[0], qr_W1[0], qr_A_choice[0], qr_B_choice[0])
+    qc.measure(qr_W1[0], c[7])
+    qc.measure(qr_W0[0], c[6])
+    qc.measure(qr_M2[0], c[5])
+
+
+    return qc
+
+
 def build_circuit_guessing() -> QuantumCircuit:
     """Guessing agent circuit builder."""
 

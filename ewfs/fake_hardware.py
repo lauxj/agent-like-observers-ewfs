@@ -9,13 +9,17 @@ from datetime import datetime
 from qiskit_aer import AerSimulator
 from qiskit_aer.noise import NoiseModel
 from qiskit_ibm_runtime import QiskitRuntimeService
-from ibm_transpilation import transpile_all_agents, PLOT_DIR as IBM_TRANSPILATION_PLOT_DIR
+try:
+    from .ibm_transpilation import transpile_all_agents, PLOT_DIR as IBM_TRANSPILATION_PLOT_DIR
+except ImportError:
+    from ibm_transpilation import transpile_all_agents, PLOT_DIR as IBM_TRANSPILATION_PLOT_DIR
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 DATA_DIR_FAKE = PROJECT_ROOT / "data" / "data_fake_hardware"
 DATA_DIR_FAKE.mkdir(parents=True, exist_ok=True)
 
 FAKE_NOISE_SEED = None
+BACKEND_NAME = "ibm_torino"
 
 
 def make_run_folder_name(backend, folder_ts=None):
@@ -69,6 +73,7 @@ def run_fake_hardware_for_backend(backend, transpiled_by_agent, shots=10_000, fo
 
     run_data = {
         "agents": {},
+        "backend": backend.name,
         "kind": "fake_hardware_noise_sim",
         "shots": int(shots),
         "timestamp": datetime.now().strftime("%Y-%m-%dT%H:%M:%S"),
@@ -88,6 +93,6 @@ def run_fake_hardware_for_backend(backend, transpiled_by_agent, shots=10_000, fo
 
 
 if __name__ == "__main__":
-    backend = QiskitRuntimeService().backend("ibm_torino")
+    backend = QiskitRuntimeService().backend(BACKEND_NAME)
     transpiled, folder_ts = prepare_fake_hardware_run(backend, save_plots=True)
     run_fake_hardware_for_backend(backend, transpiled, shots=10_000, folder_ts=folder_ts)

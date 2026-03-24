@@ -6,12 +6,19 @@ Runner file to control all possible runs and plots for:
 – Real hardware run
 """
 
-from noiseless_simulation import run_noiseless_simulation
-from fake_hardware import run_fake_hardware_for_backend, prepare_fake_hardware_run
-from real_hardware import run_real_hardware_for_backend, prepare_real_hardware_run
+try:
+    from .noiseless_simulation import run_noiseless_simulation
+    from .fake_hardware import run_fake_hardware_for_backend, prepare_fake_hardware_run
+    from .real_hardware import run_real_hardware_for_backend, prepare_real_hardware_run
+    from .lf_violations import LF_violation
+    from .time_ordering_hardware import save_visualizations_for_run as run_time_ordering_hardware
+except ImportError:
+    from noiseless_simulation import run_noiseless_simulation
+    from fake_hardware import run_fake_hardware_for_backend, prepare_fake_hardware_run
+    from real_hardware import run_real_hardware_for_backend, prepare_real_hardware_run
+    from lf_violations import LF_violation
+    from time_ordering_hardware import save_visualizations_for_run as run_time_ordering_hardware
 from pathlib import Path
-from lf_violations import LF_violation
-from time_ordering_hardware import main as run_time_ordering_hardware
 
 
 # -----------------------------------------------------------------------------
@@ -35,19 +42,22 @@ FAKE_HARDWARE_SHOTS = 10_000
 
 # Real hardware
 DO_REAL_HARDWARE = True
-REAL_HARDWARE_SHOTS = 10_000
+REAL_HARDWARE_SHOTS = 1_000
 
 # Scheduler timing / time ordering analysis for the real hardware run
 DO_TIME_ORDERING_HARDWARE = True
 
 # Backends to use
 REAL_BACKENDS = {
-    "ibm_torino": True,
+    "ibm_torino": False,
+    "ibm_kingston": False,
+    "ibm_fez": True,
+    "ibm_marrakesh": False,
 }
 
 # LF violation calculation
 CALCULATE_LF_VIOLATIONS = True
-LF_AGENTS = ["Betting Agent", "Guessing Agent", "Reflex Agent"]
+LF_AGENTS = ["Betting Agent", "Guessing Agent", "Reflex Agent", "Always 3/4 Agent"]
 
 
 def get_latest_noiseless_file():
@@ -163,7 +173,7 @@ def run_all():
                 )
 
         if DO_REAL_HARDWARE:
-            run_real_hardware_for_backend(
+            real_run_dir = run_real_hardware_for_backend(
                 backend=backend,
                 transpiled_by_agent=real_transpiled_by_agent,
                 shots=REAL_HARDWARE_SHOTS,
@@ -172,7 +182,7 @@ def run_all():
 
             if DO_TIME_ORDERING_HARDWARE:
                 print(f"\n=== Scheduler timing / time ordering ({backend.name}) ===")
-                run_time_ordering_hardware()
+                run_time_ordering_hardware(real_run_dir)
 
             if CALCULATE_LF_VIOLATIONS:
                 print_lf_violations(

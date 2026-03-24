@@ -312,7 +312,7 @@ def plot_timing_for_agent(viz_dir: Path, agent_name: str, df: pd.DataFrame):
         ax_overview.legend(handles=handles, title="Event type", loc="upper left")
 
     fig.tight_layout()
-    safe_name = agent_name.lower().replace(" ", "_")
+    safe_name = safe_label(agent_name)
     fig.savefig(viz_dir / f"{safe_name}_timing_plot.png", dpi=220, bbox_inches="tight")
     plt.close(fig)
 
@@ -352,6 +352,10 @@ def get_important_rows(df: pd.DataFrame) -> pd.DataFrame:
     return important.sort_values(["start", "resource", "op"])
 
 
+def safe_label(label: str) -> str:
+    return "".join(ch.lower() if ch.isalnum() or ch in {"-", "_"} else "_" for ch in label).strip("_")
+
+
 def save_visualizations_for_agent(viz_dir: Path, agent_name: str, metadata: dict):
     rows = parse_scheduler_timing_rows(metadata)
     if not rows:
@@ -362,7 +366,7 @@ def save_visualizations_for_agent(viz_dir: Path, agent_name: str, metadata: dict
     summary = summarize_rows(df)
     ordering = get_ordering_rows(df)
     important = get_important_rows(df)
-    safe_name = agent_name.lower().replace(" ", "_")
+    safe_name = safe_label(agent_name)
 
     summary.to_csv(viz_dir / f"{safe_name}_full_timing.csv", index=False)
     important.to_csv(viz_dir / f"{safe_name}_important_timing.csv", index=False)
@@ -371,6 +375,22 @@ def save_visualizations_for_agent(viz_dir: Path, agent_name: str, metadata: dict
     print(
         f"{agent_name}: saved {len(summary)} full rows, {len(important)} important rows, and a timing plot to {viz_dir}"
     )
+
+
+def save_visualizations_for_run(run_dir: Path):
+    metadata_path = run_dir / "scheduler_timing_metadata.json"
+
+    if not metadata_path.exists():
+        raise FileNotFoundError(f"Could not find {metadata_path}")
+
+    timing_data = load_json(metadata_path)
+    viz_dir = run_dir / "scheduler_timing_tables"
+    viz_dir.mkdir(parents=True, exist_ok=True)
+
+    for agent_name, metadata in timing_data.items():
+        save_visualizations_for_agent(viz_dir, agent_name, metadata)
+
+    print(f"Done. Timing tables saved in: {viz_dir}")
 
 
 def main():
@@ -386,19 +406,7 @@ def main():
     args = parser.parse_args()
 
     run_dir = Path(args.run_dir) if args.run_dir else find_latest_run_dir()
-    metadata_path = run_dir / "scheduler_timing_metadata.json"
-
-    if not metadata_path.exists():
-        raise FileNotFoundError(f"Could not find {metadata_path}")
-
-    timing_data = load_json(metadata_path)
-    viz_dir = run_dir / "scheduler_timing_tables"
-    viz_dir.mkdir(parents=True, exist_ok=True)
-
-    for agent_name, metadata in timing_data.items():
-        save_visualizations_for_agent(viz_dir, agent_name, metadata)
-
-    print(f"Done. Timing tables saved in: {viz_dir}")
+    save_visualizations_for_run(run_dir)
 
 
 if __name__ == "__main__":
