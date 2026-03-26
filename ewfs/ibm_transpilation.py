@@ -6,6 +6,7 @@ Set Manual qubit layout here
 
 import warnings
 from pathlib import Path
+from datetime import datetime
 import matplotlib.pyplot as plt
 from qiskit import transpile
 from qiskit.visualization import circuit_drawer
@@ -48,7 +49,9 @@ AGENTS = [
 MANUAL_LAYOUTS_BY_BACKEND = {
     "ibm_torino": {
         # 6: [28, 29, 30, 31, 14, 129],  # Reflex Agent
-        6: [60, 61, 62, 63, 14, 129],  # Reflex Agent
+        #6: [11,12,13,14, 1, 129],  # Reflex Agent
+        #6: [60, 61, 62, 63, 14, 129],  # Reflex Agent
+        6: [54, 61, 62, 63, 14, 129],  # Reflex Agent
         7: [54, 61, 62, 60, 63, 14, 129],  # Guessing Agent
         8: [54, 61, 62, 60, 63, 59, 14, 129],  # Betting Agent / Always 3/4 Agent
     },
@@ -76,6 +79,22 @@ OPT_LEVEL = 0
 
 def safe_label(label: str) -> str:
     return "".join(ch if ch.isalnum() or ch in {"-", "_"} else "_" for ch in label).strip("_")
+
+
+def make_run_folder_name(backend, folder_ts=None):
+    """Create the shared run-folder name used for transpilation plot output."""
+    if folder_ts is None:
+        folder_ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    return folder_ts, f"{backend.name}_{folder_ts}"
+
+
+def resolve_plots_dir(backend, plots_dir=None, folder_ts=None, category="transpilation_only"):
+    """Resolve a run-specific transpilation plot directory."""
+    if plots_dir is not None:
+        return Path(plots_dir)
+
+    _, run_folder_name = make_run_folder_name(backend, folder_ts)
+    return PLOT_DIR / category / run_folder_name
 
 
 def get_manual_layout(backend_name, circuit_qubit_count):
@@ -147,10 +166,18 @@ def transpile_agent_circuit(agent_name, build_fn, backend, save_plots=True, plot
     return tqc
 
 
-def transpile_all_agents(backend, save_plots=True, plots_dir=None):
+def transpile_all_agents(backend, save_plots=True, plots_dir=None, folder_ts=None, plot_category="transpilation_only"):
     """Transpile all agent circuits for one backend."""
     print("\n=== Transpilation ===")
     print(f"Backend: {backend.name}")
+    resolved_plots_dir = None
+    if save_plots:
+        resolved_plots_dir = resolve_plots_dir(
+            backend,
+            plots_dir=plots_dir,
+            folder_ts=folder_ts,
+            category=plot_category,
+        )
     out = {}
     for agent_name, build_fn in AGENTS:
         out[agent_name] = transpile_agent_circuit(
@@ -158,7 +185,7 @@ def transpile_all_agents(backend, save_plots=True, plots_dir=None):
             build_fn=build_fn,
             backend=backend,
             save_plots=save_plots,
-            plots_dir=plots_dir,
+            plots_dir=resolved_plots_dir,
         )
     return out
 

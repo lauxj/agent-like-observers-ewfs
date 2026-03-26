@@ -16,6 +16,46 @@ DATA_DIR_NOISELESS = PROJECT_ROOT / "data" / "data_noiseless_simulation"
 DATA_DIR_FAKE = PROJECT_ROOT / "data" / "data_fake_hardware"
 PLOTS_ROOT = PROJECT_ROOT / "results" / "plots" / "plots_agent_evaluation"
 
+# -----------------------------------------------------------------------------
+# Evaluation selection defaults
+#
+# Set only one number per data bucket:
+#   - 1: use the newest single run, matching the old behaviour
+#   - N > 1: use the newest N runs and average them
+#
+# Optional:
+#   - set run folder paths here to use exact runs instead
+#
+# If multiple runs are selected, scalar metrics and LF correlators are averaged
+# across runs and the displayed error bars become the SEM of the run-level
+# values.
+EVALUATION_LAST_N = {
+    "Noiseless": 1,
+    "Fake hardware": 5,
+    "Real hardware": 5,
+}
+# if paths are inserted here, they will be used instead of the above logic
+# EVALUATION_RUN_PATHS = {
+#     "Noiseless": [],
+#     "Fake hardware": ["/Users/joshua/PycharmProjects/masters_thesis_project/data/data_fake_hardware/ibm_kingston_20260324_165844",
+#                       "/Users/joshua/PycharmProjects/masters_thesis_project/data/data_fake_hardware/ibm_kingston_20260324_170126",
+#                       "/Users/joshua/PycharmProjects/masters_thesis_project/data/data_fake_hardware/ibm_kingston_20260324_170250",
+#                       "/Users/joshua/PycharmProjects/masters_thesis_project/data/data_fake_hardware/ibm_kingston_20260324_170354",
+#                       "/Users/joshua/PycharmProjects/masters_thesis_project/data/data_fake_hardware/ibm_kingston_20260324_170549"
+#                       ],
+#     "Real hardware": ["/Users/joshua/PycharmProjects/masters_thesis_project/data/data_real_hardware/ibm_kingston_20260324_165849",
+#                       "/Users/joshua/PycharmProjects/masters_thesis_project/data/data_real_hardware/ibm_kingston_20260324_170130",
+#                       "/Users/joshua/PycharmProjects/masters_thesis_project/data/data_real_hardware/ibm_kingston_20260324_170254",
+#                       "/Users/joshua/PycharmProjects/masters_thesis_project/data/data_real_hardware/ibm_kingston_20260324_170359",
+#                       "/Users/joshua/PycharmProjects/masters_thesis_project/data/data_real_hardware/ibm_kingston_20260324_170553"],
+# }
+
+EVALUATION_RUN_PATHS = {
+    "Noiseless": [],
+    "Fake hardware": [],
+    "Real hardware": [],
+}
+
 IDEAL_COLOR = "#222222"
 THEORY_LINE_COLOR = "#C92A2A"
 PAYOFF_BY_WALLET_STATE = {
@@ -48,10 +88,11 @@ GUESSING_G_INDEX_FROM_LEFT = 0
 # Reflex circuit count strings are read as c[5]...c[0].
 # L is measured into c[5] -> index 0 from the left.
 # M is measured into c[2] -> index 3 from the left.
+REFLEX_SC_INDEX_FROM_LEFT = 2
 REFLEX_L_INDEX_FROM_LEFT = 0
 REFLEX_M_INDEX_FROM_LEFT = 3
 
-LF_AGENT_NAMES = ["Betting Agent", "Guessing Agent", "Reflex Agent"]
+LF_AGENT_NAMES = ["Betting Agent", "Guessing Agent", "Reflex Agent", "Always 3/4 Agent"]
 LF_TERM_SPECS = [
     ("E11", -1.0, r"$-\langle A_1 B_1 \rangle$"),
     ("E12", 1.0, r"$\langle A_1 B_2 \rangle$"),
@@ -108,6 +149,21 @@ def style_bar_axes(ax, title: str, ylabel: str):
     ax.set_axisbelow(True)
 
 
+def place_legend_above_axes(fig, ax, *, ncol: int = 1, fontsize: int = 10, handles=None):
+    legend_kwargs = {
+        "loc": "lower center",
+        "bbox_to_anchor": (0.5, 1.02),
+        "fontsize": fontsize,
+        "frameon": True,
+        "ncol": ncol,
+        "borderaxespad": 0.0,
+    }
+    if handles is not None:
+        legend_kwargs["handles"] = handles
+    ax.legend(**legend_kwargs)
+    fig.tight_layout(rect=(0.0, 0.0, 1.0, 0.88))
+
+
 def clean_bitstring(bitstring: str) -> str:
     return "".join(ch for ch in str(bitstring) if ch in {"0", "1"})
 
@@ -116,7 +172,59 @@ def pm(bit: str) -> int:
     return 1 if bit == "0" else -1
 
 
-def find_latest_run(data_dir: Path, result_filename: str) -> Path:
+def sample_sigma(values) -> float:
+    arr = np.asarray(values, dtype=float)
+    if arr.size <= 1:
+        return 0.0
+    return float(np.std(arr, ddof=1))
+
+
+def sem_from_values(values) -> float:
+    arr = np.asarray(values, dtype=float)
+    if arr.size <= 1:
+        return 0.0
+    return float(sample_sigma(arr) / np.sqrt(arr.size))
+
+
+def summarize_measurement(values, single_run_stderr: Optional[float] = None):
+    arr = np.asarray(values, dtype=float)
+    if arr.size == 0:
+        raise ValueError("Cannot summarise an empty measurement list.")
+
+    sigma = sample_sigma(arr)
+    sem = sem_from_values(arr)
+    stderr = float(single_run_stderr or 0.0) if arr.size == 1 else sem
+    return {
+        "value": float(np.mean(arr)),
+        "stderr": stderr,
+        "sigma": sigma,
+        "sem": sem,
+        "sample_count": int(arr.size),
+    }
+
+
+def load_json(path: Path):
+    with open(path, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+
+def save_json(path: Path, obj):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(obj, f, indent=2)
+
+
+def sidecar_metadata_path(plot_path: Path) -> Path:
+    return plot_path.with_suffix(".json")
+
+
+def save_plot_metadata(plot_path: Path, metadata: dict) -> Path:
+    metadata_path = sidecar_metadata_path(plot_path)
+    save_json(metadata_path, metadata)
+    return metadata_path
+
+
+def candidate_run_dirs(data_dir: Path, result_filename: str):
     if not data_dir.exists():
         raise FileNotFoundError(f"Data directory not found: {data_dir.resolve()}")
 
@@ -129,20 +237,69 @@ def find_latest_run(data_dir: Path, result_filename: str) -> Path:
             f"No run folders with {result_filename} found in {data_dir.resolve()}"
         )
 
+    return runs
+
+
+def find_latest_run(data_dir: Path, result_filename: str) -> Path:
+    runs = candidate_run_dirs(data_dir, result_filename)
     return max(runs, key=lambda run_dir: run_dir.stat().st_mtime)
 
 
-def resolve_run_dir(data_dir: Path, result_filename: str, run_name: Optional[str]) -> Tuple[Path, str]:
-    if run_name is None:
-        return find_latest_run(data_dir, result_filename), "latest"
+def latest_n_runs(data_dir: Path, result_filename: str, count: int):
+    if count <= 0:
+        raise ValueError("last_n must be a positive integer.")
 
-    run_dir = data_dir / run_name
-    if not run_dir.is_dir():
-        raise FileNotFoundError(f"Run directory not found: {run_dir.resolve()}")
+    runs = candidate_run_dirs(data_dir, result_filename)
+    runs.sort(key=lambda run_dir: (run_dir.stat().st_mtime, run_dir.name), reverse=True)
+    return runs[:count]
+
+
+def resolve_run_path(path_ref: str, data_dir: Path, result_filename: str) -> Path:
+    raw_path = Path(path_ref).expanduser()
+    candidate_paths = [raw_path.resolve()] if raw_path.is_absolute() else [
+        (PROJECT_ROOT / raw_path).resolve(),
+        (data_dir / raw_path).resolve(),
+    ]
+
+    run_dir = next((path for path in candidate_paths if path.is_dir()), None)
+    if run_dir is None:
+        raise FileNotFoundError(f"Run directory not found: {candidate_paths[0]}")
     if not (run_dir / result_filename).exists():
         raise FileNotFoundError(f"Expected result file not found: {(run_dir / result_filename).resolve()}")
+    return run_dir
 
-    return run_dir, "manual"
+
+def resolve_manual_run_dir(data_dir: Path, result_filename: str, run_name: str) -> Path:
+    run_dir = (data_dir / run_name).resolve()
+    if not run_dir.is_dir():
+        raise FileNotFoundError(f"Run directory not found: {run_dir}")
+    if not (run_dir / result_filename).exists():
+        raise FileNotFoundError(f"Expected result file not found: {(run_dir / result_filename).resolve()}")
+    return run_dir
+
+
+def resolve_run_dirs(
+    label: str,
+    data_dir: Path,
+    result_filename: str,
+    run_name: Optional[str] = None,
+) -> Tuple[list[Path], str]:
+    if run_name:
+        return [resolve_manual_run_dir(data_dir, result_filename, run_name)], "manual"
+
+    run_paths = EVALUATION_RUN_PATHS[label]
+    if run_paths:
+        return [resolve_run_path(path_ref, data_dir, result_filename) for path_ref in run_paths], "paths"
+
+    last_n = int(EVALUATION_LAST_N[label])
+    if last_n <= 1:
+        return [find_latest_run(data_dir, result_filename)], "latest"
+
+    return latest_n_runs(data_dir, result_filename, last_n), f"last_{last_n}"
+
+
+def resolve_lf_result_paths(run_dirs):
+    return [run_dir / "lf_violations" / "lf_violations.json" for run_dir in run_dirs]
 
 
 def result_value(results, label: str, key: str):
@@ -160,6 +317,9 @@ def backend_values(results, key: str):
 def prettify_backend_name(backend_name: Optional[str]) -> str:
     if not backend_name:
         return "IBM backend"
+
+    if backend_name == "mixed_backends":
+        return "Mixed IBM backends"
 
     backend_name = str(backend_name)
     if backend_name.startswith("ibm_"):
@@ -194,6 +354,22 @@ def infer_backend_name(label: str, run_dir: Path, data: dict) -> Optional[str]:
     return None
 
 
+def summarize_backend_name(backend_names) -> Optional[str]:
+    unique_names = []
+    for backend_name in backend_names:
+        if not backend_name:
+            continue
+        backend_name = str(backend_name)
+        if backend_name not in unique_names:
+            unique_names.append(backend_name)
+
+    if not unique_names:
+        return None
+    if len(unique_names) == 1:
+        return unique_names[0]
+    return "mixed_backends"
+
+
 def build_backend_display_label(label: str, backend_name: Optional[str]) -> str:
     if label in BACKEND_DISPLAY_LABELS:
         return BACKEND_DISPLAY_LABELS[label]
@@ -226,6 +402,214 @@ def result_axis_label(result) -> str:
     return result.get("axis_label", build_backend_axis_label(result["label"], result.get("backend_name")))
 
 
+def selected_inputs_metadata(results):
+    out = []
+    for result in results:
+        out.append({
+            "label": result["label"],
+            "display_label": result["display_label"],
+            "axis_label": result["axis_label"],
+            "backend_name": result["backend_name"],
+            "selection_mode": result["selection_mode"],
+            "run_count": int(result["run_count"]),
+            "run_names": list(result["run_names"]),
+            "run_dirs": [str(path) for path in result["run_dirs"]],
+            "source_result_paths": [str(path) for path in result["source_result_paths"]],
+            "lf_result_paths": [str(path) for path in result["lf_result_paths"]],
+            "raw_shots_per_run": [int(value) for value in result["raw_shots_per_run"]],
+            "raw_shots_total": int(result["raw_shots_total"]),
+        })
+    return out
+
+
+def common_plot_metadata(results, *, plot_type: str, title: str, description: Optional[str] = None):
+    metadata = {
+        "plot_type": plot_type,
+        "title": title,
+        "created_at": datetime.now().isoformat(timespec="seconds"),
+        "uncertainty_definition": (
+            "If multiple runs are selected, displayed errors are the standard error of the mean "
+            "(SEM) across run-level values. If a single run is selected, displayed errors use "
+            "the single-run standard error stored for that metric."
+        ),
+        "selected_inputs": selected_inputs_metadata(results),
+    }
+    if description:
+        metadata["description"] = description
+    return metadata
+
+
+def build_accuracy_plot_metadata(
+    results,
+    *,
+    plot_type: str,
+    title: str,
+    value_key: str,
+    error_key: str,
+    ideal_value: float,
+    ideal_label: str,
+    ylabel: str,
+):
+    metadata = common_plot_metadata(results, plot_type=plot_type, title=title)
+    metadata["y_axis"] = ylabel
+    metadata["ideal_reference"] = {
+        "label": ideal_label,
+        "value": float(ideal_value),
+    }
+    metadata["series"] = [
+        {
+            "backend_label": result["label"],
+            "display_label": result["display_label"],
+            "value": float(result[value_key]),
+            "error": float(result[error_key]),
+        }
+        for result in results
+    ]
+    return metadata
+
+
+def build_born_rule_plot_metadata(results):
+    metadata = common_plot_metadata(
+        results,
+        plot_type="born_rule_accuracy",
+        title="Born-Rule Agent Accuracy",
+    )
+    metadata["ideal_reference"] = {"label": "Ideal Born-rule agent", "value": 1.0}
+    metadata["categories"] = [
+        {
+            "category": "P(bet 1/4 | c1=0)",
+            "series": [
+                {
+                    "backend_label": result["label"],
+                    "display_label": result["display_label"],
+                    "value": float(result["strategy_probabilities"]["P(bet 1/4 | c1=0)"]),
+                    "error": float(result["strategy_probabilities"]["P(bet 1/4 | c1=0) stderr"]),
+                }
+                for result in results
+            ],
+        },
+        {
+            "category": "P(bet 3/4 | c1=1)",
+            "series": [
+                {
+                    "backend_label": result["label"],
+                    "display_label": result["display_label"],
+                    "value": float(result["strategy_probabilities"]["P(bet 3/4 | c1=1)"]),
+                    "error": float(result["strategy_probabilities"]["P(bet 3/4 | c1=1) stderr"]),
+                }
+                for result in results
+            ],
+        },
+    ]
+    return metadata
+
+
+def build_payoff_comparison_metadata(results):
+    metadata = common_plot_metadata(
+        results,
+        plot_type="payoff_comparison",
+        title="Born-Rule vs Always-3/4 Payoff",
+    )
+    metadata["theory"] = {
+        "Born-rule agent": float(theory_payoff_for_policy("betting")),
+        "Always-3/4 agent": float(theory_payoff_for_policy("always_large")),
+    }
+    metadata["series"] = [
+        {
+            "backend_label": result["label"],
+            "display_label": result["display_label"],
+            "born_rule_payoff": float(result["observed_payoff"]),
+            "born_rule_error": float(result["observed_payoff_stderr"]),
+            "always_large_payoff": float(result["always_large_observed_payoff"]),
+            "always_large_error": float(result["always_large_observed_payoff_stderr"]),
+        }
+        for result in results
+    ]
+    return metadata
+
+
+def build_backend_lf_plot_metadata(results, backend_label: str, agent_name: str):
+    backend_result = result_for_label(results, backend_label)
+    backend_series = load_backend_lf_series(results, backend_label, agent_name)
+    metadata = common_plot_metadata(
+        results,
+        plot_type="lf_correlator_backend",
+        title=f"{agent_name}: {result_display_label(backend_result)} LF Correlators",
+        description="Standalone LF correlator and S-value plot for one backend.",
+    )
+    metadata["backend_label"] = backend_label
+    metadata["backend_display_label"] = result_display_label(backend_result)
+    metadata["agent_name"] = agent_name
+    metadata["run_count"] = int(backend_series["_run_count"])
+    metadata["correlators"] = {
+        key: {
+            "value": float(backend_series[key]["value"]),
+            "error": float(backend_series[key]["stderr"]),
+            "ideal_value": float(LF_ANALYTIC_CORRELATORS[key]),
+        }
+        for key, _, _ in LF_TERM_SPECS
+    }
+    metadata["s_value"] = {
+        "value": float(backend_series["_s_summary"]["value"]),
+        "error": float(backend_series["_s_summary"]["stderr"]),
+        "ideal_value": float(2.0 * np.sqrt(2.0) - 2.0),
+    }
+    return metadata
+
+
+def build_hardware_lf_comparison_metadata(results, agent_name: str):
+    fake_result = result_for_label(results, "Fake hardware")
+    real_result = result_for_label(results, "Real hardware")
+    fake_series = load_backend_lf_series(results, "Fake hardware", agent_name)
+    real_series = load_backend_lf_series(results, "Real hardware", agent_name)
+    metadata = common_plot_metadata(
+        results,
+        plot_type="lf_correlator_hardware_comparison",
+        title=f"{agent_name}: {result_display_label(fake_result)} vs {result_display_label(real_result)} LF Correlators",
+        description="LF correlator comparison between fake-hardware noise simulation and real hardware.",
+    )
+    metadata["agent_name"] = agent_name
+    metadata["ideal_reference"] = {
+        "correlators": {key: float(LF_ANALYTIC_CORRELATORS[key]) for key, _, _ in LF_TERM_SPECS},
+        "s_value": float(2.0 * np.sqrt(2.0) - 2.0),
+    }
+    metadata["series"] = [
+        {
+            "backend_label": "Fake hardware",
+            "display_label": result_display_label(fake_result),
+            "run_count": int(fake_series["_run_count"]),
+            "correlators": {
+                key: {
+                    "value": float(fake_series[key]["value"]),
+                    "error": float(fake_series[key]["stderr"]),
+                }
+                for key, _, _ in LF_TERM_SPECS
+            },
+            "s_value": {
+                "value": float(fake_series["_s_summary"]["value"]),
+                "error": float(fake_series["_s_summary"]["stderr"]),
+            },
+        },
+        {
+            "backend_label": "Real hardware",
+            "display_label": result_display_label(real_result),
+            "run_count": int(real_series["_run_count"]),
+            "correlators": {
+                key: {
+                    "value": float(real_series[key]["value"]),
+                    "error": float(real_series[key]["stderr"]),
+                }
+                for key, _, _ in LF_TERM_SPECS
+            },
+            "s_value": {
+                "value": float(real_series["_s_summary"]["value"]),
+                "error": float(real_series["_s_summary"]["stderr"]),
+            },
+        },
+    ]
+    return metadata
+
+
 def draw_zero_marker(ax, bar, color, height: float = 0.008):
     ax.hlines(
         y=height,
@@ -236,19 +620,34 @@ def draw_zero_marker(ax, bar, color, height: float = 0.008):
     )
 
 
-def annotate_vertical_bars(ax, bars, values, *, errors=None, upper_cap: Optional[float] = None):
+def annotate_vertical_bars(
+    ax,
+    bars,
+    values,
+    *,
+    errors=None,
+    upper_cap: Optional[float] = None,
+    positive_offset: float = 0.015,
+    negative_offset: float = 0.055,
+    reference_values=None,
+):
     if errors is None:
         errors = [0.0] * len(values)
+    if reference_values is None:
+        reference_values = [None] * len(values)
 
-    for bar, value, error in zip(bars, values, errors):
+    for bar, value, error, reference_value in zip(bars, values, errors, reference_values):
         if np.isclose(value, 0.0):
             draw_zero_marker(ax, bar, bar.get_facecolor())
 
         if value >= 0:
-            text_y = value + error + 0.015
+            top_reference = value + error
+            if reference_value is not None:
+                top_reference = max(top_reference, reference_value)
+            text_y = top_reference + positive_offset
             va = "bottom"
         else:
-            text_y = value - error - 0.055
+            text_y = value - error - negative_offset
             va = "top"
 
         if upper_cap is not None:
@@ -369,6 +768,16 @@ def extract_reflex_accuracy(counts):
     )
 
 
+def extract_reflex_sc_m_accuracy(counts):
+    return extract_binary_accuracy(
+        counts,
+        min_length=6,
+        first_index=REFLEX_M_INDEX_FROM_LEFT,
+        second_index=REFLEX_SC_INDEX_FROM_LEFT,
+        bit_names="M and S_c bits",
+    )
+
+
 def extract_always_large_accuracy(counts):
     wallet_counts = extract_wallet_counts(counts)
     total_shots = sum(wallet_counts.values())
@@ -416,11 +825,6 @@ def payoff_stats_from_counts(counts):
     }
 
 
-def load_json(path: Path):
-    with open(path, "r", encoding="utf-8") as f:
-        return json.load(f)
-
-
 def load_lf_violations_for_run(run_dir: Path):
     lf_path = run_dir / "lf_violations" / "lf_violations.json"
     if not lf_path.exists():
@@ -449,10 +853,41 @@ def lf_correlator_series_from_saved_results(agent_lf_data):
     }
 
 
+def aggregate_lf_series(lf_result_paths, agent_name: str):
+    per_run_series = []
+    per_run_s_values = []
+
+    for lf_result_path in lf_result_paths:
+        lf_results = load_json(lf_result_path)
+        agent_lf_data = lf_results["agents"][agent_name]
+        per_run_series.append(lf_correlator_series_from_saved_results(agent_lf_data))
+        per_run_s_values.append(float(agent_lf_data["S"]))
+
+    aggregated = {}
+    for key in ["E11", "E12", "E21", "E22"]:
+        values = [series[key]["value"] for series in per_run_series]
+        single_run_stderr = per_run_series[0][key]["stderr"] if len(per_run_series) == 1 else None
+        summary = summarize_measurement(values, single_run_stderr=single_run_stderr)
+        aggregated[key] = {
+            "value": summary["value"],
+            "stderr": summary["stderr"],
+            "sigma": summary["sigma"],
+            "sem": summary["sem"],
+            "shots": int(sum(series[key]["shots"] for series in per_run_series)),
+        }
+
+    single_run_s_stderr = None
+    if len(per_run_series) == 1:
+        single_run_s_stderr = float(np.sqrt(sum(per_run_series[0][key]["stderr"] ** 2 for key in ["E11", "E12", "E21", "E22"])))
+    s_summary = summarize_measurement(per_run_s_values, single_run_stderr=single_run_s_stderr)
+    aggregated["_s_summary"] = s_summary
+    aggregated["_run_count"] = len(per_run_series)
+    return aggregated
+
+
 def load_backend_lf_series(results, backend_label: str, agent_name: str):
-    run_dir = result_value(results, backend_label, "run_dir")
-    lf_results = load_lf_violations_for_run(run_dir)
-    return lf_correlator_series_from_saved_results(lf_results["agents"][agent_name])
+    lf_result_paths = result_value(results, backend_label, "lf_result_paths")
+    return aggregate_lf_series(lf_result_paths, agent_name)
 
 
 def agent_label_to_filename(agent_name: str) -> str:
@@ -499,33 +934,43 @@ def theory_payoff_for_policy(policy_name):
     return sum(THEORY_C1_PROBABILITIES[c1] * payoff for c1, payoff in per_c1.items())
 
 
-def load_backend_result(label: str, data_dir: Path, result_filename: str, run_name: Optional[str] = None):
-    run_dir, selection_mode = resolve_run_dir(data_dir, result_filename, run_name)
+def aggregate_strategy_probabilities(per_run_results):
+    aggregated = {}
+    for key in ["P(bet 1/4 | c1=0)", "P(bet 3/4 | c1=1)"]:
+        stderr_key = f"{key} stderr"
+        values = [result["strategy_probabilities"][key] for result in per_run_results]
+        single_run_stderr = per_run_results[0]["strategy_probabilities"][stderr_key] if len(per_run_results) == 1 else None
+        summary = summarize_measurement(values, single_run_stderr=single_run_stderr)
+        aggregated[key] = summary["value"]
+        aggregated[stderr_key] = summary["stderr"]
+        aggregated[f"{key} sigma"] = summary["sigma"]
+        aggregated[f"{key} sem"] = summary["sem"]
+    return aggregated
+
+
+def extract_backend_run_result(label: str, run_dir: Path, result_filename: str):
     result_path = run_dir / result_filename
-
-    with open(result_path, "r", encoding="utf-8") as f:
-        data = json.load(f)
-
+    data = load_json(result_path)
     backend_name = infer_backend_name(label, run_dir, data)
 
     betting_counts = data["agents"]["Betting Agent"]["counts"]
     always_large_counts = data["agents"]["Always 3/4 Agent"]["counts"]
+    guessing_counts = data["agents"]["Guessing Agent"]["counts"]
+    reflex_counts = data["agents"]["Reflex Agent"]["counts"]
+
     betting_payoff_stats = payoff_stats_from_counts(betting_counts)
     always_large_payoff_stats = payoff_stats_from_counts(always_large_counts)
     always_large_accuracy_stats = extract_always_large_accuracy(always_large_counts)
-    guessing_counts = data["agents"]["Guessing Agent"]["counts"]
-    reflex_counts = data["agents"]["Reflex Agent"]["counts"]
     guessing_stats = extract_guessing_accuracy(guessing_counts)
     reflex_stats = extract_reflex_accuracy(reflex_counts)
+    reflex_sc_m_stats = extract_reflex_sc_m_accuracy(reflex_counts)
+
     return {
-        "label": label,
-        "backend_name": backend_name,
-        "display_label": build_backend_display_label(label, backend_name),
-        "axis_label": build_backend_axis_label(label, backend_name),
-        "run_dir": run_dir,
+        "run_dir": run_dir.resolve(),
         "run_name": run_dir.name,
-        "selection_mode": selection_mode,
-        "source_result_path": result_path.resolve(),
+        "result_path": result_path.resolve(),
+        "backend_name": backend_name,
+        "raw_shots": int(data.get("shots", 0)),
         "strategy_probabilities": extract_strategy_probabilities(betting_counts),
         "observed_payoff": betting_payoff_stats["payoff"],
         "observed_payoff_stderr": betting_payoff_stats["payoff_stderr"],
@@ -540,16 +985,107 @@ def load_backend_result(label: str, data_dir: Path, result_filename: str, run_na
         "reflex_accuracy": reflex_stats["accuracy"],
         "reflex_accuracy_stderr": reflex_stats["stderr"],
         "reflex_accuracy_shots": reflex_stats["total_shots"],
+        "reflex_sc_m_accuracy": reflex_sc_m_stats["accuracy"],
+        "reflex_sc_m_accuracy_stderr": reflex_sc_m_stats["stderr"],
+        "reflex_sc_m_accuracy_shots": reflex_sc_m_stats["total_shots"],
     }
 
 
-def build_output_dir(label: Optional[str] = None) -> Path:
+def summarize_scalar_measurement(per_run_results, value_key: str, stderr_key: str):
+    values = [result[value_key] for result in per_run_results]
+    single_run_stderr = per_run_results[0][stderr_key] if len(per_run_results) == 1 else None
+    return summarize_measurement(values, single_run_stderr=single_run_stderr)
+
+
+def load_backend_result(
+    label: str,
+    data_dir: Path,
+    result_filename: str,
+    run_name: Optional[str] = None,
+):
+    run_dirs, selection_mode = resolve_run_dirs(label, data_dir, result_filename, run_name=run_name)
+    lf_result_paths = resolve_lf_result_paths(run_dirs)
+    per_run_results = [extract_backend_run_result(label, run_dir, result_filename) for run_dir in run_dirs]
+    backend_name = summarize_backend_name(result["backend_name"] for result in per_run_results)
+
+    observed_payoff_summary = summarize_scalar_measurement(per_run_results, "observed_payoff", "observed_payoff_stderr")
+    always_large_payoff_summary = summarize_scalar_measurement(
+        per_run_results,
+        "always_large_observed_payoff",
+        "always_large_observed_payoff_stderr",
+    )
+    always_large_accuracy_summary = summarize_scalar_measurement(
+        per_run_results,
+        "always_large_accuracy",
+        "always_large_accuracy_stderr",
+    )
+    guessing_accuracy_summary = summarize_scalar_measurement(
+        per_run_results,
+        "guessing_accuracy",
+        "guessing_accuracy_stderr",
+    )
+    reflex_accuracy_summary = summarize_scalar_measurement(
+        per_run_results,
+        "reflex_accuracy",
+        "reflex_accuracy_stderr",
+    )
+    reflex_sc_m_summary = summarize_scalar_measurement(
+        per_run_results,
+        "reflex_sc_m_accuracy",
+        "reflex_sc_m_accuracy_stderr",
+    )
+
+    return {
+        "label": label,
+        "backend_name": backend_name,
+        "display_label": build_backend_display_label(label, backend_name),
+        "axis_label": build_backend_axis_label(label, backend_name),
+        "run_dir": run_dirs[0],
+        "run_dirs": run_dirs,
+        "run_name": run_dirs[0].name if len(run_dirs) == 1 else f"{len(run_dirs)} runs",
+        "run_names": [run_dir.name for run_dir in run_dirs],
+        "run_count": len(run_dirs),
+        "selection_mode": selection_mode,
+        "source_result_path": per_run_results[0]["result_path"],
+        "source_result_paths": [result["result_path"] for result in per_run_results],
+        "raw_shots_per_run": [int(result["raw_shots"]) for result in per_run_results],
+        "raw_shots_total": int(sum(result["raw_shots"] for result in per_run_results)),
+        "lf_result_paths": lf_result_paths,
+        "strategy_probabilities": aggregate_strategy_probabilities(per_run_results),
+        "observed_payoff": observed_payoff_summary["value"],
+        "observed_payoff_stderr": observed_payoff_summary["stderr"],
+        "observed_payoff_sigma": observed_payoff_summary["sigma"],
+        "observed_payoff_sem": observed_payoff_summary["sem"],
+        "always_large_observed_payoff": always_large_payoff_summary["value"],
+        "always_large_observed_payoff_stderr": always_large_payoff_summary["stderr"],
+        "always_large_observed_payoff_sigma": always_large_payoff_summary["sigma"],
+        "always_large_observed_payoff_sem": always_large_payoff_summary["sem"],
+        "always_large_accuracy": always_large_accuracy_summary["value"],
+        "always_large_accuracy_stderr": always_large_accuracy_summary["stderr"],
+        "always_large_accuracy_sigma": always_large_accuracy_summary["sigma"],
+        "always_large_accuracy_sem": always_large_accuracy_summary["sem"],
+        "always_large_accuracy_shots": sum(result["always_large_accuracy_shots"] for result in per_run_results),
+        "guessing_accuracy": guessing_accuracy_summary["value"],
+        "guessing_accuracy_stderr": guessing_accuracy_summary["stderr"],
+        "guessing_accuracy_sigma": guessing_accuracy_summary["sigma"],
+        "guessing_accuracy_sem": guessing_accuracy_summary["sem"],
+        "guessing_accuracy_shots": sum(result["guessing_accuracy_shots"] for result in per_run_results),
+        "reflex_accuracy": reflex_accuracy_summary["value"],
+        "reflex_accuracy_stderr": reflex_accuracy_summary["stderr"],
+        "reflex_accuracy_sigma": reflex_accuracy_summary["sigma"],
+        "reflex_accuracy_sem": reflex_accuracy_summary["sem"],
+        "reflex_accuracy_shots": sum(result["reflex_accuracy_shots"] for result in per_run_results),
+        "reflex_sc_m_accuracy": reflex_sc_m_summary["value"],
+        "reflex_sc_m_accuracy_stderr": reflex_sc_m_summary["stderr"],
+        "reflex_sc_m_accuracy_sigma": reflex_sc_m_summary["sigma"],
+        "reflex_sc_m_accuracy_sem": reflex_sc_m_summary["sem"],
+        "reflex_sc_m_accuracy_shots": sum(result["reflex_sc_m_accuracy_shots"] for result in per_run_results),
+    }
+
+
+def build_output_dir() -> Path:
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    safe_label = None
-    if label:
-        safe_label = "".join(ch if ch.isalnum() or ch in {"-", "_"} else "_" for ch in label).strip("_")
-    folder_name = f"{timestamp}__{safe_label}" if safe_label else f"{timestamp}__strategy_comparison"
-    return PLOTS_ROOT / folder_name
+    return PLOTS_ROOT / timestamp
 
 
 def plot_born_rule_accuracy(results, output_dir: Path) -> Path:
@@ -558,6 +1094,7 @@ def plot_born_rule_accuracy(results, output_dir: Path) -> Path:
     categories = [r"$P(\mathrm{bet}\;1/4\mid c_1=0)$", r"$P(\mathrm{bet}\;3/4\mid c_1=1)$"]
     x = np.arange(len(categories))
     width = 0.22
+    y_max = 1.20
 
     fig, ax = plt.subplots(figsize=(9.2, 5.6))
     for idx, result in enumerate(results):
@@ -582,7 +1119,15 @@ def plot_born_rule_accuracy(results, output_dir: Path) -> Path:
             edgecolor="black",
             linewidth=1.0,
         )
-        annotate_vertical_bars(ax, bars, values, errors=errors, upper_cap=0.965)
+        annotate_vertical_bars(
+            ax,
+            bars,
+            values,
+            errors=errors,
+            upper_cap=y_max - 0.13,
+            positive_offset=0.03,
+            reference_values=[1.0] * len(values),
+        )
 
     ax.axhline(
         1.0,
@@ -594,7 +1139,7 @@ def plot_born_rule_accuracy(results, output_dir: Path) -> Path:
 
     ax.set_xticks(x)
     ax.set_xticklabels(categories)
-    ax.set_ylim(0.0, 1.12)
+    ax.set_ylim(0.0, y_max)
     style_bar_axes(ax, "Born-Rule Agent Accuracy", "Accuracy")
     ax.legend(
         loc="upper right",
@@ -710,6 +1255,8 @@ def plot_backend_lf_correlator_comparisons(results, output_dir: Path, backend_la
 
     for agent_name in LF_AGENT_NAMES:
         backend_series = load_backend_lf_series(results, backend_label, agent_name)
+        s_summary = backend_series["_s_summary"]
+        run_count = backend_series["_run_count"]
 
         raw_values = np.array([backend_series[key]["value"] for key, _, _ in LF_TERM_SPECS])
         raw_errors = np.array([backend_series[key]["stderr"] for key, _, _ in LF_TERM_SPECS])
@@ -770,8 +1317,8 @@ def plot_backend_lf_correlator_comparisons(results, output_dir: Path, backend_la
         ax1.axhline(0, color="black", linewidth=0.8, zorder=1)
         ax1.grid(axis="y", alpha=0.25)
         ax1.set_title(f"{agent_name}: {backend_title_prefix} LF Correlators")
-        ax1.plot([], [], color="red", linestyle="--", linewidth=2, label="Theoretical quantum maximum")
-        ax1.plot([], [], color="black", linewidth=1.5, marker="|", markersize=10, label=r"$1\sigma$ uncertainty")
+        ax1.plot([], [], color="red", linestyle="--", linewidth=2, label="Ideal theoretical value")
+        ax1.plot([], [], color="black", linewidth=1.5, marker="|", markersize=10, label="Standard error of the mean (SEM)")
         ax1.legend(loc="upper right", fontsize=10, frameon=True)
 
         left_exp = violation_offset
@@ -813,18 +1360,6 @@ def plot_backend_lf_correlator_comparisons(results, output_dir: Path, backend_la
             cumulative_centers.append(left_exp)
             cumulative_errors.append(np.sqrt(cumulative_variance))
 
-        ax2.errorbar(
-            cumulative_centers,
-            [0] * len(cumulative_centers),
-            xerr=[err / 2.0 for err in cumulative_errors],
-            fmt="none",
-            ecolor="black",
-            elinewidth=1.5,
-            capsize=4,
-            capthick=1.5,
-            zorder=4,
-        )
-
         threshold_ymin = 0.0
         threshold_ymax = 0.92
         for threshold in [0.0, tsirelson_violation]:
@@ -837,8 +1372,32 @@ def plot_backend_lf_correlator_comparisons(results, output_dir: Path, backend_la
                 zorder=5,
             )
 
-        final_sigma = cumulative_errors[-1]
-        final_violation = float(np.sum(signed_term_values)) - classical_bound
+        final_sigma = s_summary["stderr"]
+        final_violation = s_summary["value"]
+        if run_count > 1:
+            ax2.errorbar(
+                [cumulative_centers[-1]],
+                [0.0],
+                xerr=[final_sigma / 2.0],
+                fmt="none",
+                ecolor="black",
+                elinewidth=1.5,
+                capsize=4,
+                capthick=1.5,
+                zorder=4,
+            )
+        else:
+            ax2.errorbar(
+                cumulative_centers,
+                [0] * len(cumulative_centers),
+                xerr=[err / 2.0 for err in cumulative_errors],
+                fmt="none",
+                ecolor="black",
+                elinewidth=1.5,
+                capsize=4,
+                capthick=1.5,
+                zorder=4,
+            )
         final_text_x = cumulative_centers[-1] + final_sigma / 2.0 + 0.08
         ax2.text(
             final_text_x,
@@ -886,22 +1445,25 @@ def plot_hardware_lf_comparison_per_agent(results, output_dir: Path):
     real_label = result_display_label(real_result)
 
     for agent_name in LF_AGENT_NAMES:
-        noiseless_series = load_backend_lf_series(results, "Noiseless", agent_name)
         fake_series = load_backend_lf_series(results, "Fake hardware", agent_name)
         real_series = load_backend_lf_series(results, "Real hardware", agent_name)
+        fake_s_summary = fake_series["_s_summary"]
+        real_s_summary = real_series["_s_summary"]
+        fake_run_count = fake_series["_run_count"]
+        real_run_count = real_series["_run_count"]
 
         x_pos = np.arange(len(LF_TERM_SPECS))
         fake_values = np.array([fake_series[key]["value"] for key, _, _ in LF_TERM_SPECS])
         fake_errors = np.array([fake_series[key]["stderr"] for key, _, _ in LF_TERM_SPECS])
         real_values = np.array([real_series[key]["value"] for key, _, _ in LF_TERM_SPECS])
         real_errors = np.array([real_series[key]["stderr"] for key, _, _ in LF_TERM_SPECS])
-        noiseless_values = np.array([noiseless_series[key]["value"] for key, _, _ in LF_TERM_SPECS])
+        ideal_values = np.array([LF_ANALYTIC_CORRELATORS[key] for key, _, _ in LF_TERM_SPECS])
 
         signed_fake_values = np.array([sign * fake_series[key]["value"] for key, sign, _ in LF_TERM_SPECS])
         signed_fake_errors = np.array([fake_series[key]["stderr"] for key, _, _ in LF_TERM_SPECS])
         signed_real_values = np.array([sign * real_series[key]["value"] for key, sign, _ in LF_TERM_SPECS])
         signed_real_errors = np.array([real_series[key]["stderr"] for key, _, _ in LF_TERM_SPECS])
-        signed_noiseless_values = np.array([sign * noiseless_series[key]["value"] for key, sign, _ in LF_TERM_SPECS])
+        signed_ideal_values = np.array([sign * LF_ANALYTIC_CORRELATORS[key] for key, sign, _ in LF_TERM_SPECS])
         signed_term_labels = [label for _, _, label in LF_TERM_SPECS]
 
         fig, (ax1, ax2) = plt.subplots(
@@ -942,7 +1504,7 @@ def plot_hardware_lf_comparison_per_agent(results, output_dir: Path):
             )
             ax1.bar(
                 x_pos[idx],
-                noiseless_values[idx],
+                ideal_values[idx],
                 width=outline_width,
                 fill=False,
                 edgecolor="red",
@@ -951,26 +1513,26 @@ def plot_hardware_lf_comparison_per_agent(results, output_dir: Path):
                 zorder=3,
             )
 
-            fake_positive_reference = max(fake_values[idx] + fake_errors[idx], noiseless_values[idx])
-            fake_negative_reference = min(fake_values[idx] - fake_errors[idx], noiseless_values[idx])
+            fake_positive_reference = max(fake_values[idx] + fake_errors[idx], ideal_values[idx])
+            fake_negative_reference = min(fake_values[idx] - fake_errors[idx], ideal_values[idx])
             fake_text_y = fake_positive_reference + 0.07 if fake_values[idx] >= 0 else fake_negative_reference - 0.07
             ax1.text(
                 x_pos[idx] + fake_offset,
                 fake_text_y,
-                f"{fake_values[idx]:.3f}",
+                f"{fake_values[idx]:.3f}\n± {fake_errors[idx]:.3f}",
                 ha="center",
                 va="bottom" if fake_values[idx] >= 0 else "top",
                 fontsize=8,
                 zorder=5,
             )
 
-            real_positive_reference = max(real_values[idx] + real_errors[idx], noiseless_values[idx])
-            real_negative_reference = min(real_values[idx] - real_errors[idx], noiseless_values[idx])
+            real_positive_reference = max(real_values[idx] + real_errors[idx], ideal_values[idx])
+            real_negative_reference = min(real_values[idx] - real_errors[idx], ideal_values[idx])
             real_text_y = real_positive_reference + 0.07 if real_values[idx] >= 0 else real_negative_reference - 0.07
             ax1.text(
                 x_pos[idx] + real_offset,
                 real_text_y,
-                f"{real_values[idx]:.3f}",
+                f"{real_values[idx]:.3f}\n± {real_errors[idx]:.3f}",
                 ha="center",
                 va="bottom" if real_values[idx] >= 0 else "top",
                 fontsize=8,
@@ -988,28 +1550,28 @@ def plot_hardware_lf_comparison_per_agent(results, output_dir: Path):
         hardware_handles = [
             Patch(facecolor="white", edgecolor="black", linewidth=1.0, label=real_label),
             Patch(facecolor="white", edgecolor="black", linewidth=1.4, linestyle="--", label=fake_label),
-            Line2D([], [], color="red", linestyle="--", linewidth=2, label="Noiseless simulation"),
-            Line2D([], [], color="black", linewidth=1.5, marker="|", markersize=10, label=r"$1\sigma$ uncertainty"),
+            Line2D([], [], color="red", linestyle="--", linewidth=2, label="Ideal theoretical value"),
+            Line2D([], [], color="black", linewidth=1.5, marker="|", markersize=10, label="Standard error of the mean (SEM)"),
         ]
         ax1.legend(handles=hardware_handles, loc="upper right", fontsize=10, frameon=True)
 
         row_specs = [
-            (fake_label, 0.22, signed_fake_values, signed_fake_errors),
-            (real_label, -0.22, signed_real_values, signed_real_errors),
+            (fake_label, 0.22, signed_fake_values, signed_fake_errors, fake_s_summary, fake_run_count),
+            (real_label, -0.22, signed_real_values, signed_real_errors, real_s_summary, real_run_count),
         ]
         bar_height = 0.26
         max_right_limit = tsirelson_violation + 0.12
 
-        for row_index, (row_label, y_pos, signed_values, signed_errors) in enumerate(row_specs):
+        for row_label, y_pos, signed_values, signed_errors, s_summary, row_run_count in row_specs:
             left_exp = violation_offset
-            left_th = violation_offset
+            left_ideal = violation_offset
             cumulative_centers = []
             cumulative_errors = []
             cumulative_variance = 0.0
 
             for idx, label in enumerate(signed_term_labels):
                 width_exp = abs(signed_values[idx])
-                width_th = abs(signed_noiseless_values[idx])
+                width_ideal = abs(signed_ideal_values[idx])
 
                 ax2.barh(
                     y_pos,
@@ -1022,9 +1584,9 @@ def plot_hardware_lf_comparison_per_agent(results, output_dir: Path):
                 )
                 ax2.barh(
                     y_pos,
-                    width_th,
-                    height=bar_height + 0.05,
-                    left=left_th,
+                    width_ideal,
+                    height=bar_height + 0.08,
+                    left=left_ideal,
                     fill=False,
                     edgecolor="red",
                     linestyle="--",
@@ -1032,25 +1594,37 @@ def plot_hardware_lf_comparison_per_agent(results, output_dir: Path):
                     zorder=3,
                 )
                 left_exp += width_exp
-                left_th += width_th
+                left_ideal += width_ideal
                 cumulative_variance += signed_errors[idx] ** 2
                 cumulative_centers.append(left_exp)
                 cumulative_errors.append(np.sqrt(cumulative_variance))
 
-            ax2.errorbar(
-                cumulative_centers,
-                [y_pos] * len(cumulative_centers),
-                xerr=[err / 2.0 for err in cumulative_errors],
-                fmt="none",
-                ecolor="black",
-                elinewidth=1.5,
-                capsize=4,
-                capthick=1.5,
-                zorder=4,
-            )
-
-            final_sigma = cumulative_errors[-1]
-            final_violation = float(np.sum(signed_values)) - classical_bound
+            final_sigma = s_summary["stderr"]
+            final_violation = s_summary["value"]
+            if row_run_count > 1:
+                ax2.errorbar(
+                    [cumulative_centers[-1]],
+                    [y_pos],
+                    xerr=[final_sigma / 2.0],
+                    fmt="none",
+                    ecolor="black",
+                    elinewidth=1.5,
+                    capsize=4,
+                    capthick=1.5,
+                    zorder=4,
+                )
+            else:
+                ax2.errorbar(
+                    cumulative_centers,
+                    [y_pos] * len(cumulative_centers),
+                    xerr=[err / 2.0 for err in cumulative_errors],
+                    fmt="none",
+                    ecolor="black",
+                    elinewidth=1.5,
+                    capsize=4,
+                    capthick=1.5,
+                    zorder=4,
+                )
             final_text_x = cumulative_centers[-1] + final_sigma / 2.0 + 0.08
             ax2.text(
                 final_text_x,
@@ -1138,7 +1712,7 @@ def plot_accuracy_comparison(
     values = backend_values(results, value_key)
     errors = backend_values(results, error_key)
     x = np.arange(len(BACKEND_LABELS))
-    y_max = 1.12 if np.isclose(ideal_value, 1.0) else 1.05
+    y_max = 1.22 if np.isclose(ideal_value, 1.0) else 1.14
 
     fig, ax = plt.subplots(figsize=(9.2, 5.6))
     bars = ax.bar(
@@ -1151,7 +1725,15 @@ def plot_accuracy_comparison(
         edgecolor="black",
         linewidth=1.0,
     )
-    annotate_vertical_bars(ax, bars, values, errors=errors, upper_cap=0.985)
+    annotate_vertical_bars(
+        ax,
+        bars,
+        values,
+        errors=errors,
+        upper_cap=y_max - 0.13,
+        positive_offset=0.03,
+        reference_values=[ideal_value] * len(values),
+    )
 
     ax.axhline(
         ideal_value,
@@ -1168,6 +1750,7 @@ def plot_accuracy_comparison(
         loc="upper right",
         fontsize=10,
         frameon=True,
+        bbox_to_anchor=(0.985, 0.99),
     )
     fig.tight_layout()
 
@@ -1219,6 +1802,20 @@ def plot_always_large_accuracy(results, output_dir: Path) -> Path:
     )
 
 
+def plot_reflex_sc_m_accuracy(results, output_dir: Path) -> Path:
+    return plot_accuracy_comparison(
+        results,
+        output_dir,
+        value_key="reflex_sc_m_accuracy",
+        error_key="reflex_sc_m_accuracy_stderr",
+        title=r"Reflex Agent: $S_c$ and $M$ Agreement",
+        ylabel=r"$P(M=S_c)$",
+        ideal_value=1.0,
+        ideal_label=r"Ideal agreement = 1.0",
+        filename="reflex_agent_sc_m_agreement_accuracy.png",
+    )
+
+
 def print_payoff_summary(results):
     print("\nExpected payoff comparison:")
     for result in results:
@@ -1254,6 +1851,16 @@ def print_reflex_summary(results):
         )
 
 
+def print_reflex_sc_m_summary(results):
+    print("\nReflex agent S_c/M agreement accuracy:")
+    for result in results:
+        print(
+            f"  {result_display_label(result)}: {result['reflex_sc_m_accuracy']:.4f} "
+            f"+/- {result['reflex_sc_m_accuracy_stderr']:.4f} "
+            f"(n={result['reflex_sc_m_accuracy_shots']})"
+        )
+
+
 def print_always_large_summary(results):
     print("\nAlways-3/4 agent accuracy:")
     for result in results:
@@ -1264,6 +1871,17 @@ def print_always_large_summary(results):
         )
 
 
+def print_selection_summary(results):
+    print("\nSelected evaluation inputs:")
+    for result in results:
+        print(
+            f"  {result_display_label(result)}: {result['selection_mode']} "
+            f"({result['run_count']} run{'s' if result['run_count'] != 1 else ''})"
+        )
+        for run_name in result["run_names"]:
+            print(f"    - {run_name}")
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Create the Betting Agent Born-rule strategy comparison plot."
@@ -1271,28 +1889,126 @@ def main():
     parser.add_argument("--noiseless-run", type=str, default=None, help="Run folder name inside data/data_noiseless_simulation.")
     parser.add_argument("--fake-run", type=str, default=None, help="Run folder name inside data/data_fake_hardware.")
     parser.add_argument("--real-run", type=str, default=None, help="Run folder name inside data/data_real_hardware.")
-    parser.add_argument("--label", type=str, default=None, help="Optional short label to include in the output folder name.")
     args = parser.parse_args()
 
     results = [
-        load_backend_result("Noiseless", DATA_DIR_NOISELESS, "noiseless_simulation.json", run_name=args.noiseless_run),
-        load_backend_result("Fake hardware", DATA_DIR_FAKE, "fake_hardware_noise_sim.json", run_name=args.fake_run),
-        load_backend_result("Real hardware", DATA_DIR_REAL, "real_hardware_run.json", run_name=args.real_run),
+        load_backend_result(
+            "Noiseless",
+            DATA_DIR_NOISELESS,
+            "noiseless_simulation.json",
+            run_name=args.noiseless_run,
+        ),
+        load_backend_result(
+            "Fake hardware",
+            DATA_DIR_FAKE,
+            "fake_hardware_noise_sim.json",
+            run_name=args.fake_run,
+        ),
+        load_backend_result(
+            "Real hardware",
+            DATA_DIR_REAL,
+            "real_hardware_run.json",
+            run_name=args.real_run,
+        ),
     ]
 
-    output_dir = build_output_dir(args.label)
-    born_rule_accuracy_plot_path = plot_born_rule_accuracy(results, output_dir)
-    always_large_vs_betting_plot_path = plot_always_large_vs_betting_payoff_comparison(results, output_dir)
+    output_dir = build_output_dir()
+    accuracy_dir = output_dir / "accuracy"
+    reflex_agreement_dir = accuracy_dir / "reflex_agreement"
+    comparison_dir = output_dir / "comparison"
+    correlators_dir = output_dir / "correlators_and_lf_values"
+    correlators_noiseless_dir = correlators_dir / "noiseless"
+    correlators_fake_dir = correlators_dir / "fake_hardware"
+    correlators_real_dir = correlators_dir / "real_hardware"
+    correlators_comparison_dir = correlators_dir / "comparison"
+
+    born_rule_accuracy_plot_path = plot_born_rule_accuracy(results, accuracy_dir)
+    save_plot_metadata(
+        born_rule_accuracy_plot_path,
+        build_born_rule_plot_metadata(results),
+    )
+    always_large_vs_betting_plot_path = plot_always_large_vs_betting_payoff_comparison(results, comparison_dir)
+    save_plot_metadata(
+        always_large_vs_betting_plot_path,
+        build_payoff_comparison_metadata(results),
+    )
     lf_correlator_plot_paths = []
-    lf_correlator_plot_paths.extend(plot_backend_lf_correlator_comparisons(results, output_dir, "Real hardware"))
-    lf_correlator_plot_paths.extend(plot_backend_lf_correlator_comparisons(results, output_dir, "Fake hardware"))
-    hardware_comparison_lf_plot_paths = plot_hardware_lf_comparison_per_agent(results, output_dir)
-    guessing_plot_path = plot_guessing_accuracy(results, output_dir)
-    reflex_plot_path = plot_reflex_accuracy(results, output_dir)
-    always_large_accuracy_plot_path = plot_always_large_accuracy(results, output_dir)
+    noiseless_lf_plot_paths = plot_backend_lf_correlator_comparisons(results, correlators_noiseless_dir, "Noiseless")
+    for plot_path, agent_name in zip(noiseless_lf_plot_paths, LF_AGENT_NAMES):
+        save_plot_metadata(plot_path, build_backend_lf_plot_metadata(results, "Noiseless", agent_name))
+    lf_correlator_plot_paths.extend(noiseless_lf_plot_paths)
+    real_lf_plot_paths = plot_backend_lf_correlator_comparisons(results, correlators_real_dir, "Real hardware")
+    for plot_path, agent_name in zip(real_lf_plot_paths, LF_AGENT_NAMES):
+        save_plot_metadata(plot_path, build_backend_lf_plot_metadata(results, "Real hardware", agent_name))
+    lf_correlator_plot_paths.extend(real_lf_plot_paths)
+    fake_lf_plot_paths = plot_backend_lf_correlator_comparisons(results, correlators_fake_dir, "Fake hardware")
+    for plot_path, agent_name in zip(fake_lf_plot_paths, LF_AGENT_NAMES):
+        save_plot_metadata(plot_path, build_backend_lf_plot_metadata(results, "Fake hardware", agent_name))
+    lf_correlator_plot_paths.extend(fake_lf_plot_paths)
+    hardware_comparison_lf_plot_paths = plot_hardware_lf_comparison_per_agent(results, correlators_comparison_dir)
+    for plot_path, agent_name in zip(hardware_comparison_lf_plot_paths, LF_AGENT_NAMES):
+        save_plot_metadata(plot_path, build_hardware_lf_comparison_metadata(results, agent_name))
+    guessing_plot_path = plot_guessing_accuracy(results, accuracy_dir)
+    save_plot_metadata(
+        guessing_plot_path,
+        build_accuracy_plot_metadata(
+            results,
+            plot_type="guessing_accuracy",
+            title="Guessing Agent Accuracy",
+            value_key="guessing_accuracy",
+            error_key="guessing_accuracy_stderr",
+            ideal_value=0.75,
+            ideal_label="Ideal accuracy = 0.75",
+            ylabel="Guess accuracy",
+        ),
+    )
+    reflex_plot_path = plot_reflex_accuracy(results, accuracy_dir)
+    save_plot_metadata(
+        reflex_plot_path,
+        build_accuracy_plot_metadata(
+            results,
+            plot_type="reflex_accuracy",
+            title="Reflex Agent Accuracy",
+            value_key="reflex_accuracy",
+            error_key="reflex_accuracy_stderr",
+            ideal_value=1.0,
+            ideal_label="Ideal accuracy = 1.0",
+            ylabel="Reflex accuracy",
+        ),
+    )
+    reflex_sc_m_plot_path = plot_reflex_sc_m_accuracy(results, reflex_agreement_dir)
+    save_plot_metadata(
+        reflex_sc_m_plot_path,
+        build_accuracy_plot_metadata(
+            results,
+            plot_type="reflex_sc_m_accuracy",
+            title=r"Reflex Agent: $S_c$ and $M$ Agreement",
+            value_key="reflex_sc_m_accuracy",
+            error_key="reflex_sc_m_accuracy_stderr",
+            ideal_value=1.0,
+            ideal_label=r"Ideal agreement = 1.0",
+            ylabel=r"$P(M=S_c)$",
+        ),
+    )
+    always_large_accuracy_plot_path = plot_always_large_accuracy(results, accuracy_dir)
+    save_plot_metadata(
+        always_large_accuracy_plot_path,
+        build_accuracy_plot_metadata(
+            results,
+            plot_type="always_large_accuracy",
+            title="Always-3/4 Agent Accuracy",
+            value_key="always_large_accuracy",
+            error_key="always_large_accuracy_stderr",
+            ideal_value=1.0,
+            ideal_label="Ideal accuracy = 1.0",
+            ylabel="Always-3/4 accuracy",
+        ),
+    )
+    print_selection_summary(results)
     print_payoff_summary(results)
     print_guessing_summary(results)
     print_reflex_summary(results)
+    print_reflex_sc_m_summary(results)
     print_always_large_summary(results)
     print(f"Saved Born-rule accuracy plot to: {born_rule_accuracy_plot_path}")
     print(f"Saved betting-vs-always-3/4 payoff comparison plot to: {always_large_vs_betting_plot_path}")
@@ -1302,6 +2018,7 @@ def main():
         print(f"Saved combined hardware LF correlator plot to: {plot_path}")
     print(f"Saved guessing accuracy plot to: {guessing_plot_path}")
     print(f"Saved reflex accuracy plot to: {reflex_plot_path}")
+    print(f"Saved reflex S_c/M agreement accuracy plot to: {reflex_sc_m_plot_path}")
     print(f"Saved always-3/4 accuracy plot to: {always_large_accuracy_plot_path}")
 
 
