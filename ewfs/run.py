@@ -42,7 +42,7 @@ FAKE_HARDWARE_SHOTS = 10_000
 
 # Real hardware
 DO_REAL_HARDWARE = True
-REAL_HARDWARE_SHOTS = 3_000
+REAL_HARDWARE_SHOTS = 1_000
 
 # Scheduler timing / time ordering analysis for the real hardware run
 DO_TIME_ORDERING_HARDWARE = True
