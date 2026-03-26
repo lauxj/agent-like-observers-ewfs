@@ -1332,6 +1332,7 @@ def plot_backend_lf_correlator_comparisons(results, output_dir: Path, backend_la
             width_exp = abs(signed_term_values[idx])
             width_th = abs(signed_term_theory_values[idx])
             term_sigma = signed_term_errors[idx]
+            theory_height = bar_height + 0.1
 
             ax2.barh(
                 0,
@@ -1342,14 +1343,26 @@ def plot_backend_lf_correlator_comparisons(results, output_dir: Path, backend_la
                 edgecolor="none",
                 zorder=2,
             )
-            ax2.barh(
-                0,
-                width_th,
-                height=bar_height + 0.1,
-                left=left_th,
-                fill=False,
-                edgecolor="red",
-                linestyle="--",
+
+            theory_left = left_th
+            theory_right = left_th + width_th
+            theory_ymin = -theory_height / 2.0
+            theory_ymax = theory_height / 2.0
+            ax2.hlines(
+                [theory_ymin, theory_ymax],
+                theory_left,
+                theory_right,
+                colors="red",
+                linestyles="--",
+                linewidth=1.5,
+                zorder=3,
+            )
+            ax2.vlines(
+                [theory_left, theory_right],
+                theory_ymin,
+                theory_ymax,
+                colors="red",
+                linestyles="--",
                 linewidth=1.5,
                 zorder=3,
             )
@@ -1572,6 +1585,7 @@ def plot_hardware_lf_comparison_per_agent(results, output_dir: Path):
             for idx, label in enumerate(signed_term_labels):
                 width_exp = abs(signed_values[idx])
                 width_ideal = abs(signed_ideal_values[idx])
+                theory_height = bar_height + 0.08
 
                 ax2.barh(
                     y_pos,
@@ -1582,14 +1596,26 @@ def plot_hardware_lf_comparison_per_agent(results, output_dir: Path):
                     edgecolor="none",
                     zorder=2,
                 )
-                ax2.barh(
-                    y_pos,
-                    width_ideal,
-                    height=bar_height + 0.08,
-                    left=left_ideal,
-                    fill=False,
-                    edgecolor="red",
-                    linestyle="--",
+
+                theory_left = left_ideal
+                theory_right = left_ideal + width_ideal
+                theory_ymin = y_pos - theory_height / 2.0
+                theory_ymax = y_pos + theory_height / 2.0
+                ax2.hlines(
+                    [theory_ymin, theory_ymax],
+                    theory_left,
+                    theory_right,
+                    colors="red",
+                    linestyles="--",
+                    linewidth=1.5,
+                    zorder=3,
+                )
+                ax2.vlines(
+                    [theory_left, theory_right],
+                    theory_ymin,
+                    theory_ymax,
+                    colors="red",
+                    linestyles="--",
                     linewidth=1.5,
                     zorder=3,
                 )
