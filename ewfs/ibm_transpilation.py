@@ -13,19 +13,9 @@ from qiskit.visualization import circuit_drawer
 from qiskit_ibm_runtime import QiskitRuntimeService
 
 try:
-    from ewfs.agents import (
-        build_circuit_reflex,
-        build_circuit_guessing,
-        build_circuit_betting,
-        build_circuit_always_large,
-    )
+    from ewfs.agents import AGENTS
 except ModuleNotFoundError:
-    from agents import (
-        build_circuit_reflex,
-        build_circuit_guessing,
-        build_circuit_betting,
-        build_circuit_always_large,
-    )
+    from agents import AGENTS
 
 warnings.filterwarnings(
     "ignore",
@@ -38,13 +28,6 @@ PLOT_DIR = PROJECT_ROOT / "results" / "plots" / "plots_ibm_transpilation"
 PLOT_DIR.mkdir(parents=True, exist_ok=True)
 
 BACKEND_NAME = "ibm_torino"
-
-AGENTS = [
-    ("Reflex Agent", build_circuit_reflex),
-    ("Guessing Agent", build_circuit_guessing),
-    ("Betting Agent", build_circuit_betting),
-    ("Always 3/4 Agent", build_circuit_always_large),
-]
 
 MANUAL_LAYOUTS_BY_BACKEND = {
     "ibm_torino": {
@@ -166,7 +149,14 @@ def transpile_agent_circuit(agent_name, build_fn, backend, save_plots=True, plot
     return tqc
 
 
-def transpile_all_agents(backend, save_plots=True, plots_dir=None, folder_ts=None, plot_category="transpilation_only"):
+def transpile_all_agents(
+    backend,
+    save_plots=True,
+    plots_dir=None,
+    folder_ts=None,
+    plot_category="transpilation_only",
+    agent_builders=None,
+):
     """Transpile all agent circuits for one backend."""
     print("\n=== Transpilation ===")
     print(f"Backend: {backend.name}")
@@ -179,7 +169,8 @@ def transpile_all_agents(backend, save_plots=True, plots_dir=None, folder_ts=Non
             category=plot_category,
         )
     out = {}
-    for agent_name, build_fn in AGENTS:
+    selected_agents = list(agent_builders) if agent_builders is not None else AGENTS
+    for agent_name, build_fn in selected_agents:
         out[agent_name] = transpile_agent_circuit(
             agent_name=agent_name,
             build_fn=build_fn,

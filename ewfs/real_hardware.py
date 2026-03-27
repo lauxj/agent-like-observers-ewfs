@@ -10,6 +10,7 @@ from datetime import datetime
 import pickle
 from qiskit_ibm_runtime import SamplerV2 as Sampler
 from qiskit_ibm_runtime import QiskitRuntimeService
+from qiskit.primitives.containers.sampler_pub import SamplerPub
 try:
     from .ibm_transpilation import transpile_all_agents, PLOT_DIR as IBM_TRANSPILATION_PLOT_DIR
 except ImportError:
@@ -113,7 +114,47 @@ def submit_hardware_job(transpiled_by_agent, backend, shots):
     return job, results, meta_info
 
 
-def save_hardware_results(job, results, meta_info, backend, shots, transpiled_by_agent, folder_ts=None):
+def submit_grouped_hardware_job(job_groups, backend):
+    """Submit one Sampler job containing multiple circuit groups with per-pub shot counts."""
+    sampler = Sampler(mode=backend)
+
+    sampler.options.experimental = {"execution": {"scheduler_timing": True}}
+    print("Enabled scheduler_timing for Sampler job.")
+
+    pubs = []
+    group_slices = []
+
+    for group in job_groups:
+        start = len(pubs)
+        meta_info = []
+        for agent_name, tqc in group["transpiled_by_agent"].items():
+            pubs.append(SamplerPub(tqc, shots=group["shots"]))
+            meta_info.append(agent_name)
+        group_slices.append({
+            **group,
+            "meta_info": meta_info,
+            "start": start,
+            "end": len(pubs),
+        })
+
+    job = sampler.run(pubs)
+    results = list(job.result())
+    return job, results, group_slices
+
+
+def save_hardware_results(
+    job,
+    results,
+    meta_info,
+    backend,
+    shots,
+    transpiled_by_agent,
+    folder_ts=None,
+    result_filename="real_hardware_run.json",
+    timing_filename="scheduler_timing_metadata.json",
+    job_info_filename="job_info.json",
+    raw_result_filename="raw_sampler_result.pkl",
+):
     """Save hardware result counts for one backend run."""
     folder_ts, run_folder_name = make_run_folder_name(backend, folder_ts)
     results_dir = DATA_DIR_REAL / run_folder_name
@@ -125,7 +166,7 @@ def save_hardware_results(job, results, meta_info, backend, shots, transpiled_by
         job_id = None
 
     save_json(
-        results_dir / "job_info.json",
+        results_dir / job_info_filename,
         {
             "backend": backend.name,
             "job_id": job_id,
@@ -150,29 +191,45 @@ def save_hardware_results(job, results, meta_info, backend, shots, transpiled_by
         run_data["agents"][agent_name] = {"counts": counts}
         timing_data[agent_name] = metadata
 
-    save_json(results_dir / "real_hardware_run.json", run_data)
-    save_json(results_dir / "scheduler_timing_metadata.json", timing_data)
+    save_json(results_dir / result_filename, run_data)
+    save_json(results_dir / timing_filename, timing_data)
 
-    with open(results_dir / "raw_sampler_result.pkl", "wb") as f:
+    with open(results_dir / raw_result_filename, "wb") as f:
         pickle.dump(results, f)
 
     print(f"Saved real-hardware data to: {results_dir.resolve()}")
     return results_dir
 
 
-def prepare_real_hardware_run(backend, save_plots=True, folder_ts=None):
+def prepare_real_hardware_run(
+    backend,
+    save_plots=True,
+    folder_ts=None,
+    agent_builders=None,
+    plots_subdir="transpiled_agents",
+):
     """Prepare transpiled circuits and matching plot folder for one real-hardware run."""
     folder_ts, run_folder_name = make_run_folder_name(backend, folder_ts)
-    plots_dir = IBM_TRANSPILATION_PLOT_DIR / "real_hardware" / run_folder_name
+    plots_dir = IBM_TRANSPILATION_PLOT_DIR / "real_hardware" / run_folder_name / plots_subdir
     transpiled_by_agent = transpile_all_agents(
         backend,
         save_plots=save_plots,
         plots_dir=plots_dir,
+        agent_builders=agent_builders,
     )
     return transpiled_by_agent, folder_ts
 
 
-def run_real_hardware_for_backend(backend, transpiled_by_agent, shots=300, folder_ts=None):
+def run_real_hardware_for_backend(
+    backend,
+    transpiled_by_agent,
+    shots=300,
+    folder_ts=None,
+    result_filename="real_hardware_run.json",
+    timing_filename="scheduler_timing_metadata.json",
+    job_info_filename="job_info.json",
+    raw_result_filename="raw_sampler_result.pkl",
+):
     """Run one real-hardware job for all agents on one backend."""
     print("\n--- Real hardware run ---")
     job, results, meta_info = submit_hardware_job(
@@ -188,7 +245,41 @@ def run_real_hardware_for_backend(backend, transpiled_by_agent, shots=300, folde
         shots=shots,
         transpiled_by_agent=transpiled_by_agent,
         folder_ts=folder_ts,
+        result_filename=result_filename,
+        timing_filename=timing_filename,
+        job_info_filename=job_info_filename,
+        raw_result_filename=raw_result_filename,
     )
+
+
+def run_grouped_real_hardware_for_backend(
+    backend,
+    job_groups,
+    folder_ts=None,
+):
+    """Run one real-hardware job for multiple circuit groups and save split result files."""
+    print("\n--- Real hardware run ---")
+    job, results, group_slices = submit_grouped_hardware_job(
+        job_groups=job_groups,
+        backend=backend,
+    )
+
+    saved_dirs = {}
+    for group in group_slices:
+        saved_dirs[group["group_key"]] = save_hardware_results(
+            job=job,
+            results=results[group["start"]:group["end"]],
+            meta_info=group["meta_info"],
+            backend=backend,
+            shots=group["shots"],
+            transpiled_by_agent=group["transpiled_by_agent"],
+            folder_ts=folder_ts,
+            result_filename=group.get("result_filename", "real_hardware_run.json"),
+            timing_filename=group.get("timing_filename", "scheduler_timing_metadata.json"),
+            job_info_filename=group.get("job_info_filename", "job_info.json"),
+            raw_result_filename=group.get("raw_result_filename", "raw_sampler_result.pkl"),
+        )
+    return saved_dirs
 
 
 if __name__ == "__main__":

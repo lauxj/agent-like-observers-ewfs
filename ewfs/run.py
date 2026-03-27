@@ -6,16 +6,31 @@ Runner file to control all possible runs and plots for:
 – Real hardware run
 """
 
+import argparse
+from datetime import datetime
+
 try:
     from .noiseless_simulation import run_noiseless_simulation
     from .fake_hardware import run_fake_hardware_for_backend, prepare_fake_hardware_run
-    from .real_hardware import run_real_hardware_for_backend, prepare_real_hardware_run
+    from .real_hardware import (
+        run_real_hardware_for_backend,
+        run_grouped_real_hardware_for_backend,
+        prepare_real_hardware_run,
+    )
+    from .agents import AGENTS
+    from .accuracy_test_circuits import ACCURACY_TEST_BUILDERS
     from .lf_violations import LF_violation
     from .time_ordering_hardware import save_visualizations_for_run as run_time_ordering_hardware
 except ImportError:
     from noiseless_simulation import run_noiseless_simulation
     from fake_hardware import run_fake_hardware_for_backend, prepare_fake_hardware_run
-    from real_hardware import run_real_hardware_for_backend, prepare_real_hardware_run
+    from real_hardware import (
+        run_real_hardware_for_backend,
+        run_grouped_real_hardware_for_backend,
+        prepare_real_hardware_run,
+    )
+    from agents import AGENTS
+    from accuracy_test_circuits import ACCURACY_TEST_BUILDERS
     from lf_violations import LF_violation
     from time_ordering_hardware import save_visualizations_for_run as run_time_ordering_hardware
 from pathlib import Path
@@ -42,15 +57,21 @@ FAKE_HARDWARE_SHOTS = 5_000
 
 # Real hardware
 DO_REAL_HARDWARE = True
-REAL_HARDWARE_SHOTS = 5_000
+REAL_HARDWARE_SHOTS = 1_000
+
+# Accuracy-test circuits
+INCLUDE_ACCURACY_TEST_CIRCUITS = True
+NOISELESS_ACCURACY_TEST_SHOTS = NOISELESS_SHOTS
+FAKE_HARDWARE_ACCURACY_TEST_SHOTS = FAKE_HARDWARE_SHOTS
+REAL_HARDWARE_ACCURACY_TEST_SHOTS = 1000
 
 # Scheduler timing / time ordering analysis for the real hardware run
 DO_TIME_ORDERING_HARDWARE = True
 
 # Backends to use
 REAL_BACKENDS = {
-    "ibm_torino": True,
-    "ibm_kingston": False,
+    "ibm_torino": False,
+    "ibm_kingston": True,
     "ibm_fez": False,
     "ibm_marrakesh": False,
 }
@@ -111,16 +132,82 @@ def get_real_backend(service, backend_name: str):
 # -----------------------------------------------------------------------------
 # Main runner:
 
-def run_all():
+def parse_args():
+    """Parse runner CLI overrides."""
+    parser = argparse.ArgumentParser(description="Run EWFS experiments and optional accuracy-test circuits.")
+    parser.add_argument(
+        "--include-accuracy-tests",
+        dest="include_accuracy_tests",
+        action="store_true",
+        help="Include the hard-coded accuracy-test circuits alongside the main EWFS circuits.",
+    )
+    parser.add_argument(
+        "--exclude-accuracy-tests",
+        dest="include_accuracy_tests",
+        action="store_false",
+        help="Run only the main EWFS circuits.",
+    )
+    parser.add_argument(
+        "--shots-main",
+        type=int,
+        default=None,
+        help="Override the main-circuit shot count for all enabled run modes.",
+    )
+    parser.add_argument(
+        "--shots-accuracy-tests",
+        type=int,
+        default=None,
+        help="Override the accuracy-test circuit shot count for all enabled run modes.",
+    )
+    parser.set_defaults(include_accuracy_tests=INCLUDE_ACCURACY_TEST_CIRCUITS)
+    return parser.parse_args()
+
+
+def run_all(
+    include_accuracy_tests=INCLUDE_ACCURACY_TEST_CIRCUITS,
+    shots_main=None,
+    shots_accuracy_tests=None,
+):
     """Run whichever parts are enabled above."""
+    main_builders = AGENTS
+    accuracy_test_builders = ACCURACY_TEST_BUILDERS
+
+    noiseless_main_shots = NOISELESS_SHOTS if shots_main is None else shots_main
+    fake_main_shots = FAKE_HARDWARE_SHOTS if shots_main is None else shots_main
+    real_main_shots = REAL_HARDWARE_SHOTS if shots_main is None else shots_main
+
+    noiseless_accuracy_test_shots = (
+        NOISELESS_ACCURACY_TEST_SHOTS if shots_accuracy_tests is None else shots_accuracy_tests
+    )
+    fake_accuracy_test_shots = (
+        FAKE_HARDWARE_ACCURACY_TEST_SHOTS if shots_accuracy_tests is None else shots_accuracy_tests
+    )
+    real_accuracy_test_shots = (
+        REAL_HARDWARE_ACCURACY_TEST_SHOTS if shots_accuracy_tests is None else shots_accuracy_tests
+    )
+
     if DO_NOISELESS_SIM:
+        noiseless_folder_ts = datetime.now().strftime("%Y%m%d_%H%M%S")
         run_noiseless_simulation(
-            shots=NOISELESS_SHOTS,
+            shots=noiseless_main_shots,
             save=SAVE_NOISELESS_DATA,
             make_plots=PLOT_NOISELESS_CIRCUITS,
+            agent_builders=main_builders,
+            folder_ts=noiseless_folder_ts,
+            plots_subdir="circuit_plots",
         )
         if CALCULATE_LF_VIOLATIONS and SAVE_NOISELESS_DATA:
             print_lf_violations("Noiseless simulation", get_latest_noiseless_file())
+        if include_accuracy_tests:
+            run_noiseless_simulation(
+                shots=noiseless_accuracy_test_shots,
+                save=SAVE_NOISELESS_DATA,
+                make_plots=PLOT_NOISELESS_CIRCUITS,
+                agent_builders=accuracy_test_builders,
+                folder_ts=noiseless_folder_ts,
+                result_filename="accuracy_test_noiseless_simulation.json",
+                plots_subdir="accuracy_test_circuit_plots",
+            )
 
     needs_ibm_backend = DO_IBM_TRANSPILATION or DO_FAKE_HARDWARE_SIM or DO_REAL_HARDWARE
     if not needs_ibm_backend:
@@ -145,25 +232,39 @@ def run_all():
             fake_transpiled_by_agent, fake_folder_ts = prepare_fake_hardware_run(
                 backend=backend,
                 save_plots=SAVE_IBM_TRANSPILATION_PLOTS,
+                agent_builders=main_builders,
+                plots_subdir="transpiled_agents",
             )
 
         if DO_REAL_HARDWARE:
             real_transpiled_by_agent, real_folder_ts = prepare_real_hardware_run(
                 backend=backend,
                 save_plots=SAVE_IBM_TRANSPILATION_PLOTS,
+                agent_builders=main_builders,
+                plots_subdir="transpiled_agents",
             )
 
         if DO_IBM_TRANSPILATION and not DO_FAKE_HARDWARE_SIM and not DO_REAL_HARDWARE:
-            prepare_real_hardware_run(
+            _, transpilation_only_folder_ts = prepare_real_hardware_run(
                 backend=backend,
                 save_plots=SAVE_IBM_TRANSPILATION_PLOTS,
+                agent_builders=main_builders,
+                plots_subdir="transpiled_agents",
             )
+            if include_accuracy_tests:
+                prepare_real_hardware_run(
+                    backend=backend,
+                    save_plots=SAVE_IBM_TRANSPILATION_PLOTS,
+                    folder_ts=transpilation_only_folder_ts,
+                    agent_builders=accuracy_test_builders,
+                    plots_subdir="accuracy_test_transpiled_circuits",
+                )
 
         if DO_FAKE_HARDWARE_SIM:
             run_fake_hardware_for_backend(
                 backend=backend,
                 transpiled_by_agent=fake_transpiled_by_agent,
-                shots=FAKE_HARDWARE_SHOTS,
+                shots=fake_main_shots,
                 folder_ts=fake_folder_ts,
             )
             if CALCULATE_LF_VIOLATIONS:
@@ -171,14 +272,63 @@ def run_all():
                     f"Fake hardware simulation ({backend.name})",
                     get_latest_fake_file(backend.name),
                 )
+            if include_accuracy_tests:
+                fake_accuracy_test_transpiled, fake_accuracy_test_folder_ts = prepare_fake_hardware_run(
+                    backend=backend,
+                    save_plots=SAVE_IBM_TRANSPILATION_PLOTS,
+                    folder_ts=fake_folder_ts,
+                    agent_builders=accuracy_test_builders,
+                    plots_subdir="accuracy_test_transpiled_circuits",
+                )
+                run_fake_hardware_for_backend(
+                    backend=backend,
+                    transpiled_by_agent=fake_accuracy_test_transpiled,
+                    shots=fake_accuracy_test_shots,
+                    folder_ts=fake_accuracy_test_folder_ts,
+                    result_filename="accuracy_test_fake_hardware_noise_sim.json",
+                )
 
         if DO_REAL_HARDWARE:
-            real_run_dir = run_real_hardware_for_backend(
-                backend=backend,
-                transpiled_by_agent=real_transpiled_by_agent,
-                shots=REAL_HARDWARE_SHOTS,
-                folder_ts=real_folder_ts,
-            )
+            if include_accuracy_tests:
+                real_accuracy_test_transpiled, real_accuracy_test_folder_ts = prepare_real_hardware_run(
+                    backend=backend,
+                    save_plots=SAVE_IBM_TRANSPILATION_PLOTS,
+                    folder_ts=real_folder_ts,
+                    agent_builders=accuracy_test_builders,
+                    plots_subdir="accuracy_test_transpiled_circuits",
+                )
+                real_run_dirs = run_grouped_real_hardware_for_backend(
+                    backend=backend,
+                    folder_ts=real_accuracy_test_folder_ts,
+                    job_groups=[
+                        {
+                            "group_key": "main",
+                            "transpiled_by_agent": real_transpiled_by_agent,
+                            "shots": real_main_shots,
+                            "result_filename": "real_hardware_run.json",
+                            "timing_filename": "scheduler_timing_metadata.json",
+                            "job_info_filename": "job_info.json",
+                            "raw_result_filename": "raw_sampler_result.pkl",
+                        },
+                        {
+                            "group_key": "accuracy_tests",
+                            "transpiled_by_agent": real_accuracy_test_transpiled,
+                            "shots": real_accuracy_test_shots,
+                            "result_filename": "accuracy_test_real_hardware_run.json",
+                            "timing_filename": "accuracy_test_scheduler_timing_metadata.json",
+                            "job_info_filename": "accuracy_test_job_info.json",
+                            "raw_result_filename": "accuracy_test_raw_sampler_result.pkl",
+                        },
+                    ],
+                )
+                real_run_dir = real_run_dirs["main"]
+            else:
+                real_run_dir = run_real_hardware_for_backend(
+                    backend=backend,
+                    transpiled_by_agent=real_transpiled_by_agent,
+                    shots=real_main_shots,
+                    folder_ts=real_folder_ts,
+                )
 
             if DO_TIME_ORDERING_HARDWARE:
                 print(f"\n=== Scheduler timing / time ordering ({backend.name}) ===")
@@ -192,4 +342,9 @@ def run_all():
 
 
 if __name__ == "__main__":
-    run_all()
+    args = parse_args()
+    run_all(
+        include_accuracy_tests=args.include_accuracy_tests,
+        shots_main=args.shots_main,
+        shots_accuracy_tests=args.shots_accuracy_tests,
+    )

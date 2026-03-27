@@ -1,5 +1,6 @@
 import argparse
 import json
+from collections import defaultdict
 from datetime import datetime
 from pathlib import Path
 from typing import Optional, Tuple
@@ -32,7 +33,7 @@ PLOTS_ROOT = PROJECT_ROOT / "results" / "plots" / "plots_agent_evaluation"
 EVALUATION_LAST_N = {
     "Noiseless": 1,
     "Fake hardware": 5,
-    "Real hardware": 5,
+    "Real hardware": 1,
 }
 # if paths are inserted here, they will be used instead of the above logic
 # EVALUATION_RUN_PATHS = {
@@ -93,6 +94,7 @@ REFLEX_L_INDEX_FROM_LEFT = 0
 REFLEX_M_INDEX_FROM_LEFT = 3
 
 LF_AGENT_NAMES = ["Betting Agent", "Guessing Agent", "Reflex Agent", "Always 3/4 Agent"]
+STANDARD_AGENT_NAMES = LF_AGENT_NAMES
 LF_TERM_SPECS = [
     ("E11", -1.0, r"$-\langle A_1 B_1 \rangle$"),
     ("E12", 1.0, r"$\langle A_1 B_2 \rangle$"),
@@ -131,6 +133,13 @@ THEORY_COMPARISON_COLORS = {
     "Always 1/4": "#17BECF",
     "Always 3/4": "#BCBD22",
 }
+ACCURACY_TEST_RESULT_FILENAMES = {
+    "Noiseless": "accuracy_test_noiseless_simulation.json",
+    "Fake hardware": "accuracy_test_fake_hardware_noise_sim.json",
+    "Real hardware": "accuracy_test_real_hardware_run.json",
+}
+ACCURACY_TEST_SUFFIX_INIT0 = "_accuracy_test_init0"
+ACCURACY_TEST_SUFFIX_INIT1 = "_accuracy_test_init1"
 PAYOFF_COLORS = [
     BACKEND_COLORS["Noiseless"],
     BACKEND_COLORS["Fake hardware"],
@@ -240,16 +249,45 @@ def candidate_run_dirs(data_dir: Path, result_filename: str):
     return runs
 
 
-def find_latest_run(data_dir: Path, result_filename: str) -> Path:
+def result_file_has_required_agents(result_path: Path, required_agent_names) -> bool:
+    if not required_agent_names:
+        return True
+    try:
+        data = load_json(result_path)
+    except (OSError, json.JSONDecodeError):
+        return False
+    agents = data.get("agents", {})
+    return all(agent_name in agents for agent_name in required_agent_names)
+
+
+def find_latest_run(data_dir: Path, result_filename: str, required_agent_names=None) -> Path:
     runs = candidate_run_dirs(data_dir, result_filename)
+    if required_agent_names:
+        runs = [
+            run_dir for run_dir in runs
+            if result_file_has_required_agents(run_dir / result_filename, required_agent_names)
+        ]
+        if not runs:
+            raise FileNotFoundError(
+                f"No run folders with {result_filename} and required agents found in {data_dir.resolve()}"
+            )
     return max(runs, key=lambda run_dir: run_dir.stat().st_mtime)
 
 
-def latest_n_runs(data_dir: Path, result_filename: str, count: int):
+def latest_n_runs(data_dir: Path, result_filename: str, count: int, required_agent_names=None):
     if count <= 0:
         raise ValueError("last_n must be a positive integer.")
 
     runs = candidate_run_dirs(data_dir, result_filename)
+    if required_agent_names:
+        runs = [
+            run_dir for run_dir in runs
+            if result_file_has_required_agents(run_dir / result_filename, required_agent_names)
+        ]
+        if not runs:
+            raise FileNotFoundError(
+                f"No run folders with {result_filename} and required agents found in {data_dir.resolve()}"
+            )
     runs.sort(key=lambda run_dir: (run_dir.stat().st_mtime, run_dir.name), reverse=True)
     return runs[:count]
 
@@ -293,9 +331,64 @@ def resolve_run_dirs(
 
     last_n = int(EVALUATION_LAST_N[label])
     if last_n <= 1:
-        return [find_latest_run(data_dir, result_filename)], "latest"
+        return [find_latest_run(data_dir, result_filename, required_agent_names=STANDARD_AGENT_NAMES)], "latest"
 
-    return latest_n_runs(data_dir, result_filename, last_n), f"last_{last_n}"
+    return latest_n_runs(
+        data_dir,
+        result_filename,
+        last_n,
+        required_agent_names=STANDARD_AGENT_NAMES,
+    ), f"last_{last_n}"
+
+
+def resolve_accuracy_test_run_dirs(
+    label: str,
+    data_dir: Path,
+    main_result_filename: str,
+    accuracy_test_result_filename: str,
+    run_name: Optional[str] = None,
+) -> Tuple[list[Path], str]:
+    if run_name:
+        run_dir = resolve_manual_run_dir(data_dir, main_result_filename, run_name)
+        if not (run_dir / accuracy_test_result_filename).exists():
+            raise FileNotFoundError(
+                f"Accuracy-test result file not found for selected run: "
+                f"{(run_dir / accuracy_test_result_filename).resolve()}"
+            )
+        return [run_dir], "manual"
+
+    run_paths = EVALUATION_RUN_PATHS[label]
+    if run_paths:
+        run_dirs = [
+            resolve_run_path(path_ref, data_dir, main_result_filename)
+            for path_ref in run_paths
+        ]
+        missing = [
+            str((run_dir / accuracy_test_result_filename).resolve())
+            for run_dir in run_dirs
+            if not (run_dir / accuracy_test_result_filename).exists()
+        ]
+        if missing:
+            raise FileNotFoundError(
+                "Missing accuracy-test result files for the explicitly selected runs:\n"
+                + "\n".join(missing)
+            )
+        return run_dirs, "paths"
+
+    run_dirs, selection_mode = resolve_run_dirs(
+        label,
+        data_dir,
+        main_result_filename,
+        run_name=None,
+    )
+    if all((run_dir / accuracy_test_result_filename).exists() for run_dir in run_dirs):
+        return run_dirs, selection_mode
+
+    last_n = int(EVALUATION_LAST_N[label])
+    fallback_mode = "latest_accuracy_test_available" if last_n <= 1 else f"last_{last_n}_accuracy_test_available"
+    if last_n <= 1:
+        return [find_latest_run(data_dir, accuracy_test_result_filename)], fallback_mode
+    return latest_n_runs(data_dir, accuracy_test_result_filename, last_n), fallback_mode
 
 
 def resolve_lf_result_paths(run_dirs):
@@ -1037,6 +1130,7 @@ def load_backend_result(
 
     return {
         "label": label,
+        "available": True,
         "backend_name": backend_name,
         "display_label": build_backend_display_label(label, backend_name),
         "axis_label": build_backend_axis_label(label, backend_name),
@@ -1086,6 +1180,189 @@ def load_backend_result(
 def build_output_dir() -> Path:
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     return PLOTS_ROOT / timestamp
+
+
+def parse_accuracy_test_agent_label(agent_label: str) -> tuple[str, str]:
+    if agent_label.endswith(ACCURACY_TEST_SUFFIX_INIT0):
+        return agent_label[:-len(ACCURACY_TEST_SUFFIX_INIT0)], "0"
+    if agent_label.endswith(ACCURACY_TEST_SUFFIX_INIT1):
+        return agent_label[:-len(ACCURACY_TEST_SUFFIX_INIT1)], "1"
+    raise ValueError(f"Unrecognized accuracy-test circuit label: {agent_label}")
+
+
+def extract_memory_initialization_accuracy(counts, *, expected_bit: str):
+    matching_shots = 0
+    total_shots = 0
+
+    for bitstring, shots in counts.items():
+        cleaned = clean_bitstring(bitstring)
+        if len(cleaned) < 3:
+            raise ValueError(f"Bitstring too short to contain c[2] memory readout: {bitstring}")
+
+        total_shots += shots
+        if cleaned[-3] == expected_bit:
+            matching_shots += shots
+
+    accuracy = (matching_shots / total_shots) if total_shots else 0.0
+    stderr = np.sqrt(accuracy * (1.0 - accuracy) / total_shots) if total_shots else 0.0
+    return {
+        "accuracy": accuracy,
+        "inaccuracy": 1.0 - accuracy,
+        "stderr": stderr,
+        "matching_shots": matching_shots,
+        "total_shots": total_shots,
+        "expected_memory_bit": expected_bit,
+    }
+
+
+def extract_accuracy_test_run_result(label: str, run_dir: Path, result_filename: str):
+    result_path = run_dir / result_filename
+    if not result_path.exists():
+        raise FileNotFoundError(
+            f"Accuracy-test result file not found for {label}: {result_path.resolve()}"
+        )
+
+    data = load_json(result_path)
+    backend_name = infer_backend_name(label, run_dir, data)
+    agents = {}
+
+    for agent_label, agent_data in data["agents"].items():
+        base_agent_name, expected_bit = parse_accuracy_test_agent_label(agent_label)
+        stats = extract_memory_initialization_accuracy(
+            agent_data["counts"],
+            expected_bit=expected_bit,
+        )
+        agents[agent_label] = {
+            "base_agent_name": base_agent_name,
+            **stats,
+        }
+
+    return {
+        "run_dir": run_dir.resolve(),
+        "run_name": run_dir.name,
+        "result_path": result_path.resolve(),
+        "backend_name": backend_name,
+        "raw_shots": int(data.get("shots", 0)),
+        "agents": agents,
+    }
+
+
+def summarise_accuracy_test_agent_runs(per_run_agents, *, field_name: str):
+    values = [agent_run[field_name] for agent_run in per_run_agents]
+    single_run_stderr = per_run_agents[0]["stderr"] if len(per_run_agents) == 1 else None
+    summary = summarize_measurement(values, single_run_stderr=single_run_stderr)
+    return {
+        field_name: summary["value"],
+        f"{field_name}_stderr": summary["stderr"],
+        f"{field_name}_sigma": summary["sigma"],
+        f"{field_name}_sem": summary["sem"],
+        "shots": int(sum(agent_run["total_shots"] for agent_run in per_run_agents)),
+    }
+
+
+def load_accuracy_test_backend_result(
+    label: str,
+    data_dir: Path,
+    main_result_filename: str,
+    accuracy_test_result_filename: str,
+    run_name: Optional[str] = None,
+):
+    run_dirs, selection_mode = resolve_accuracy_test_run_dirs(
+        label,
+        data_dir,
+        main_result_filename,
+        accuracy_test_result_filename,
+        run_name=run_name,
+    )
+    per_run_results = [
+        extract_accuracy_test_run_result(label, run_dir, accuracy_test_result_filename)
+        for run_dir in run_dirs
+    ]
+    backend_name = summarize_backend_name(result["backend_name"] for result in per_run_results)
+
+    per_circuit_runs = defaultdict(list)
+    for run_result in per_run_results:
+        for circuit_label, circuit_result in run_result["agents"].items():
+            per_circuit_runs[circuit_label].append(circuit_result)
+
+    circuits = {}
+    for circuit_label, circuit_runs in sorted(per_circuit_runs.items()):
+        base_agent_name, expected_bit = parse_accuracy_test_agent_label(circuit_label)
+        accuracy_summary = summarise_accuracy_test_agent_runs(circuit_runs, field_name="accuracy")
+        inaccuracy_summary = summarise_accuracy_test_agent_runs(circuit_runs, field_name="inaccuracy")
+        circuits[circuit_label] = {
+            "base_agent_name": base_agent_name,
+            "expected_memory_bit": expected_bit,
+            "accuracy": accuracy_summary["accuracy"],
+            "accuracy_stderr": accuracy_summary["accuracy_stderr"],
+            "accuracy_sigma": accuracy_summary["accuracy_sigma"],
+            "accuracy_sem": accuracy_summary["accuracy_sem"],
+            "inaccuracy": inaccuracy_summary["inaccuracy"],
+            "inaccuracy_stderr": inaccuracy_summary["inaccuracy_stderr"],
+            "inaccuracy_sigma": inaccuracy_summary["inaccuracy_sigma"],
+            "inaccuracy_sem": inaccuracy_summary["inaccuracy_sem"],
+            "shots": accuracy_summary["shots"],
+        }
+
+    return {
+        "label": label,
+        "backend_name": backend_name,
+        "display_label": build_backend_display_label(label, backend_name),
+        "axis_label": build_backend_axis_label(label, backend_name),
+        "run_dir": run_dirs[0],
+        "run_dirs": run_dirs,
+        "run_name": run_dirs[0].name if len(run_dirs) == 1 else f"{len(run_dirs)} runs",
+        "run_names": [run_dir.name for run_dir in run_dirs],
+        "run_count": len(run_dirs),
+        "selection_mode": selection_mode,
+        "source_result_paths": [result["result_path"] for result in per_run_results],
+        "raw_shots_per_run": [int(result["raw_shots"]) for result in per_run_results],
+        "raw_shots_total": int(sum(result["raw_shots"] for result in per_run_results)),
+        "circuits": circuits,
+    }
+
+
+def build_memory_inaccuracy_summary(results) -> dict:
+    selected_inputs = []
+    for result in results:
+        selected_inputs.append({
+            "label": result["label"],
+            "display_label": result["display_label"],
+            "backend_name": result["backend_name"],
+            "selection_mode": result["selection_mode"],
+            "run_count": int(result["run_count"]),
+            "run_names": list(result["run_names"]),
+            "run_dirs": [str(path) for path in result["run_dirs"]],
+            "source_result_paths": [str(path) for path in result.get("source_result_paths", [])],
+            "raw_shots_per_run": [int(value) for value in result.get("raw_shots_per_run", [])],
+            "raw_shots_total": int(result.get("raw_shots_total", 0)),
+            "available": bool(result.get("available", True)),
+            "error": result.get("error"),
+        })
+
+    return {
+        "created_at": datetime.now().isoformat(timespec="seconds"),
+        "description": (
+            "Memory inaccuracy for the hard-coded accuracy-test circuits. "
+            "For each circuit, the initialized M bit is compared against the final measurement of c[2]."
+        ),
+        "selected_inputs": selected_inputs,
+        "backends": [
+            {
+                "label": result["label"],
+                "display_label": result["display_label"],
+                "backend_name": result["backend_name"],
+                "available": bool(result.get("available", True)),
+                "error": result.get("error"),
+                "selection_mode": result["selection_mode"],
+                "run_count": int(result["run_count"]),
+                "run_names": list(result["run_names"]),
+                "source_result_paths": [str(path) for path in result.get("source_result_paths", [])],
+                "circuits": result.get("circuits", {}),
+            }
+            for result in results
+        ],
+    }
 
 
 def plot_born_rule_accuracy(results, output_dir: Path) -> Path:
@@ -1937,6 +2214,44 @@ def main():
             run_name=args.real_run,
         ),
     ]
+    memory_inaccuracy_results = []
+    accuracy_specs = [
+        ("Noiseless", DATA_DIR_NOISELESS, "noiseless_simulation.json", ACCURACY_TEST_RESULT_FILENAMES["Noiseless"], args.noiseless_run),
+        ("Fake hardware", DATA_DIR_FAKE, "fake_hardware_noise_sim.json", ACCURACY_TEST_RESULT_FILENAMES["Fake hardware"], args.fake_run),
+        ("Real hardware", DATA_DIR_REAL, "real_hardware_run.json", ACCURACY_TEST_RESULT_FILENAMES["Real hardware"], args.real_run),
+    ]
+    for label, data_dir, main_result_filename, accuracy_result_filename, run_name in accuracy_specs:
+        main_result = result_for_label(results, label)
+        try:
+            memory_inaccuracy_results.append(
+                load_accuracy_test_backend_result(
+                    label,
+                    data_dir,
+                    main_result_filename,
+                    accuracy_result_filename,
+                    run_name=run_name,
+                )
+            )
+        except FileNotFoundError as exc:
+            memory_inaccuracy_results.append({
+                "label": label,
+                "available": False,
+                "backend_name": main_result["backend_name"],
+                "display_label": main_result["display_label"],
+                "axis_label": main_result["axis_label"],
+                "run_dir": main_result["run_dir"],
+                "run_dirs": main_result["run_dirs"],
+                "run_name": main_result["run_name"],
+                "run_names": main_result["run_names"],
+                "run_count": main_result["run_count"],
+                "selection_mode": f"{main_result['selection_mode']}_missing_accuracy_test_data",
+                "source_result_paths": [],
+                "raw_shots_per_run": [],
+                "raw_shots_total": 0,
+                "agents": {},
+                "circuits": {},
+                "error": str(exc),
+            })
 
     output_dir = build_output_dir()
     accuracy_dir = output_dir / "accuracy"
@@ -1947,6 +2262,8 @@ def main():
     correlators_fake_dir = correlators_dir / "fake_hardware"
     correlators_real_dir = correlators_dir / "real_hardware"
     correlators_comparison_dir = correlators_dir / "comparison"
+    memory_inaccuracy_path = output_dir / "memory_inaccuracy.json"
+    save_json(memory_inaccuracy_path, build_memory_inaccuracy_summary(memory_inaccuracy_results))
 
     born_rule_accuracy_plot_path = plot_born_rule_accuracy(results, accuracy_dir)
     save_plot_metadata(
@@ -2046,6 +2363,10 @@ def main():
     print(f"Saved reflex accuracy plot to: {reflex_plot_path}")
     print(f"Saved reflex S_c/M agreement accuracy plot to: {reflex_sc_m_plot_path}")
     print(f"Saved always-3/4 accuracy plot to: {always_large_accuracy_plot_path}")
+    print(f"Saved memory inaccuracy summary to: {memory_inaccuracy_path}")
+    for result in memory_inaccuracy_results:
+        if not result.get("available", True):
+            print(f"Memory inaccuracy unavailable for {result['display_label']}: {result['error']}")
 
 
 if __name__ == "__main__":

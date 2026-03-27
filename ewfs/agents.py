@@ -345,3 +345,11 @@ def build_circuit_reflex() -> QuantumCircuit:
     qc.measure(qr_L[0], c[5])
 
     return qc
+
+
+AGENTS = [
+    ("Reflex Agent", build_circuit_reflex),
+    ("Guessing Agent", build_circuit_guessing),
+    ("Betting Agent", build_circuit_betting),
+    ("Always 3/4 Agent", build_circuit_always_large),
+]

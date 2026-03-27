@@ -50,19 +50,32 @@ def simulate_with_backend_noise(tqc, backend, shots, sim=None):
     return counts_to_jsonable(counts)
 
 
-def prepare_fake_hardware_run(backend, save_plots=True, folder_ts=None):
+def prepare_fake_hardware_run(
+    backend,
+    save_plots=True,
+    folder_ts=None,
+    agent_builders=None,
+    plots_subdir="transpiled_agents",
+):
     """Prepare transpiled circuits and matching plot folder for one fake-hardware run."""
     folder_ts, run_folder_name = make_run_folder_name(backend, folder_ts)
-    plots_dir = IBM_TRANSPILATION_PLOT_DIR / "fake_hardware" / run_folder_name
+    plots_dir = IBM_TRANSPILATION_PLOT_DIR / "fake_hardware" / run_folder_name / plots_subdir
     transpiled_by_agent = transpile_all_agents(
         backend,
         save_plots=save_plots,
         plots_dir=plots_dir,
+        agent_builders=agent_builders,
     )
     return transpiled_by_agent, folder_ts
 
 
-def run_fake_hardware_for_backend(backend, transpiled_by_agent, shots=10_000, folder_ts=None):
+def run_fake_hardware_for_backend(
+    backend,
+    transpiled_by_agent,
+    shots=10_000,
+    folder_ts=None,
+    result_filename="fake_hardware_noise_sim.json",
+):
     """Run calibrated-noise simulations for all agents on one backend and save raw data."""
     print("\n=== Fake hardware simulation ===")
     print(f"Backend: {backend.name}")
@@ -88,8 +101,9 @@ def run_fake_hardware_for_backend(backend, transpiled_by_agent, shots=10_000, fo
     out_dir = DATA_DIR_FAKE / run_folder_name
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    save_json(out_dir / "fake_hardware_noise_sim.json", run_data)
-    print(f"Saved data → {out_dir.resolve()}")
+    out_path = out_dir / result_filename
+    save_json(out_path, run_data)
+    print(f"Saved data → {out_path.resolve()}")
 
 
 if __name__ == "__main__":
