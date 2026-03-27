@@ -19,6 +19,7 @@ except ImportError:
 
 ACCURACY_TEST_SUFFIX_INIT0 = "_accuracy_test_init0"
 ACCURACY_TEST_SUFFIX_INIT1 = "_accuracy_test_init1"
+BETTING_ACCURACY_M1_EXTRA_DELAY_DT = 115
 
 
 def _initialize_memory_bit(qc: QuantumCircuit, memory_qubit, init_bit: int) -> None:
@@ -196,6 +197,7 @@ def _build_circuit_betting_accuracy_test(init_bit: int) -> QuantumCircuit:
         qc.ry(beta2, qr_SD[0])
 
     qc.barrier(qr_SC[0], qr_SD[0], qr_M1[0], qr_M2[0], qr_W0[0], qr_W1[0], qr_A_choice[0], qr_B_choice[0])
+    qc.delay(BETTING_ACCURACY_M1_EXTRA_DELAY_DT, qr_M1[0], unit="dt")
     qc.measure(qr_M1[0], c[2])
     qc.measure(qr_SC[0], c[3])
     qc.measure(qr_SD[0], c[4])
