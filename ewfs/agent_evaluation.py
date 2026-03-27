@@ -33,7 +33,7 @@ PLOTS_ROOT = PROJECT_ROOT / "results" / "plots" / "plots_agent_evaluation"
 EVALUATION_LAST_N = {
     "Noiseless": 1,
     "Fake hardware": 5,
-    "Real hardware": 1,
+    "Real hardware": 5,
 }
 # if paths are inserted here, they will be used instead of the above logic
 # EVALUATION_RUN_PATHS = {

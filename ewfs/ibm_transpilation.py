@@ -1,7 +1,7 @@
 """
 ibm_transpilation.py
 Transpile all circuits for one IBM backend
-Set Manual qubit layout here
+Automatically choose the best qubit layout when calibration CSV data is available.
 """
 
 import warnings
@@ -14,8 +14,24 @@ from qiskit_ibm_runtime import QiskitRuntimeService
 
 try:
     from ewfs.agents import AGENTS
+    from ewfs.find_best_agent_layouts import (
+        DEFAULT_CHOICE_DISTANCE_WEIGHT,
+        DEFAULT_COHERENCE_WEIGHT,
+        DEFAULT_CZ_WEIGHT,
+        DEFAULT_M_PRIORITY_FACTOR,
+        DEFAULT_READOUT_WEIGHT,
+        find_optimal_layout_for_circuit,
+    )
 except ModuleNotFoundError:
     from agents import AGENTS
+    from find_best_agent_layouts import (
+        DEFAULT_CHOICE_DISTANCE_WEIGHT,
+        DEFAULT_COHERENCE_WEIGHT,
+        DEFAULT_CZ_WEIGHT,
+        DEFAULT_M_PRIORITY_FACTOR,
+        DEFAULT_READOUT_WEIGHT,
+        find_optimal_layout_for_circuit,
+    )
 
 warnings.filterwarnings(
     "ignore",
@@ -28,6 +44,12 @@ PLOT_DIR = PROJECT_ROOT / "results" / "plots" / "plots_ibm_transpilation"
 PLOT_DIR.mkdir(parents=True, exist_ok=True)
 
 BACKEND_NAME = "ibm_torino"
+USE_AUTO_LAYOUT = True
+AUTO_LAYOUT_READOUT_WEIGHT = DEFAULT_READOUT_WEIGHT
+AUTO_LAYOUT_CZ_WEIGHT = DEFAULT_CZ_WEIGHT
+AUTO_LAYOUT_COHERENCE_WEIGHT = DEFAULT_COHERENCE_WEIGHT
+AUTO_LAYOUT_M_PRIORITY_FACTOR = DEFAULT_M_PRIORITY_FACTOR
+AUTO_LAYOUT_CHOICE_DISTANCE_WEIGHT = DEFAULT_CHOICE_DISTANCE_WEIGHT
 
 MANUAL_LAYOUTS_BY_BACKEND = {
     "ibm_torino": {
@@ -58,6 +80,7 @@ MANUAL_LAYOUTS_BY_BACKEND = {
 }
 
 OPT_LEVEL = 0
+ACCURACY_TEST_INFIX = "_accuracy_test_"
 
 
 def safe_label(label: str) -> str:
@@ -114,12 +137,50 @@ def get_manual_layout(backend_name, circuit_qubit_count):
     return initial_layout
 
 
+def resolve_layout_reference(agent_name, qc):
+    """Use the parent agent circuit as the layout reference for accuracy-test circuits."""
+    if ACCURACY_TEST_INFIX not in agent_name:
+        return agent_name, qc
+
+    parent_agent_name = agent_name.split(ACCURACY_TEST_INFIX, 1)[0]
+    for known_agent_name, build_fn in AGENTS:
+        if known_agent_name == parent_agent_name:
+            return parent_agent_name, build_fn()
+
+    return agent_name, qc
+
+
+def get_initial_layout(agent_name, qc, backend):
+    """Return the best known initial layout for one circuit on one backend."""
+    layout_agent_name, layout_qc = resolve_layout_reference(agent_name, qc)
+
+    if USE_AUTO_LAYOUT:
+        try:
+            return find_optimal_layout_for_circuit(
+                agent_name=layout_agent_name,
+                circuit=layout_qc,
+                backend_name=backend.name,
+                readout_weight=AUTO_LAYOUT_READOUT_WEIGHT,
+                cz_weight=AUTO_LAYOUT_CZ_WEIGHT,
+                coherence_weight=AUTO_LAYOUT_COHERENCE_WEIGHT,
+                m_priority_factor=AUTO_LAYOUT_M_PRIORITY_FACTOR,
+                choice_distance_weight=AUTO_LAYOUT_CHOICE_DISTANCE_WEIGHT,
+            )
+        except ValueError as exc:
+            if "No calibration CSV found for backend" not in str(exc):
+                raise
+            print(f"    auto-layout unavailable ({exc}); falling back to manual layout")
+
+    return get_manual_layout(backend.name, qc.num_qubits)
+
+
 def transpile_agent_circuit(agent_name, build_fn, backend, save_plots=True, plots_dir=None):
     """Build and transpile one circuit for one agent."""
     print(f"  {agent_name}: transpiling")
 
     qc = build_fn()
-    initial_layout = get_manual_layout(backend.name, qc.num_qubits)
+    initial_layout = get_initial_layout(agent_name=agent_name, qc=qc, backend=backend)
+    print(f"    initial_layout={initial_layout}")
 
     tqc = transpile(
         qc,
