@@ -498,20 +498,26 @@ def result_axis_label(result) -> str:
 def selected_inputs_metadata(results):
     out = []
     for result in results:
-        out.append({
+        entry = {
             "label": result["label"],
-            "display_label": result["display_label"],
-            "axis_label": result["axis_label"],
-            "backend_name": result["backend_name"],
-            "selection_mode": result["selection_mode"],
-            "run_count": int(result["run_count"]),
-            "run_names": list(result["run_names"]),
-            "run_dirs": [str(path) for path in result["run_dirs"]],
-            "source_result_paths": [str(path) for path in result["source_result_paths"]],
-            "lf_result_paths": [str(path) for path in result["lf_result_paths"]],
-            "raw_shots_per_run": [int(value) for value in result["raw_shots_per_run"]],
-            "raw_shots_total": int(result["raw_shots_total"]),
-        })
+            "display_label": result.get("display_label"),
+            "axis_label": result.get("axis_label"),
+            "backend_name": result.get("backend_name"),
+            "selection_mode": result.get("selection_mode"),
+            "run_count": int(result.get("run_count", 0)),
+            "run_names": list(result.get("run_names", [])),
+            "run_dirs": [str(path) for path in result.get("run_dirs", [])],
+            "source_result_paths": [str(path) for path in result.get("source_result_paths", [])],
+            "raw_shots_per_run": [int(value) for value in result.get("raw_shots_per_run", [])],
+            "raw_shots_total": int(result.get("raw_shots_total", 0)),
+        }
+        if "lf_result_paths" in result:
+            entry["lf_result_paths"] = [str(path) for path in result.get("lf_result_paths", [])]
+        if "available" in result:
+            entry["available"] = bool(result.get("available", True))
+        if "error" in result:
+            entry["error"] = result.get("error")
+        out.append(entry)
     return out
 
 
@@ -558,6 +564,45 @@ def build_accuracy_plot_metadata(
         }
         for result in results
     ]
+    return metadata
+
+
+def build_memory_epsilon_plot_metadata(memory_inaccuracy_results):
+    summary = build_memory_inaccuracy_summary(memory_inaccuracy_results)
+    metadata = common_plot_metadata(
+        memory_inaccuracy_results,
+        plot_type="combined_memory_initialization_epsilon",
+        title=r"$P(c \neq a \mid x=1)$ estimate",
+        description=(
+            "For each agent, init0 and init1 accuracy-test results are combined as "
+            "0.5 * (accuracy_init0 + accuracy_init1). With P(a=0)=P(a=1)=0.5, "
+            "the plotted quantity is P(c != a) for the final A = c estimate."
+        ),
+    )
+    metadata["y_axis"] = r"$P(c \neq a \mid x=1)$"
+    metadata["categories"] = []
+    backend_map = {
+        backend["label"]: backend
+        for backend in summary["backends"]
+    }
+    for agent_name in STANDARD_AGENT_NAMES:
+        category = {"agent_name": agent_name, "series": []}
+        for backend_label in BACKEND_LABELS:
+            backend = backend_map[backend_label]
+            combined = backend.get("combined_agents", {}).get(agent_name)
+            if combined is None:
+                continue
+            category["series"].append(
+                {
+                    "backend_label": backend_label,
+                    "display_label": backend["display_label"],
+                    "epsilon": float(combined["epsilon"]),
+                    "epsilon_stderr": float(combined["epsilon_stderr"]),
+                    "mean_init_accuracy": float(combined["mean_init_accuracy"]),
+                    "mean_init_accuracy_stderr": float(combined["mean_init_accuracy_stderr"]),
+                }
+            )
+        metadata["categories"].append(category)
     return metadata
 
 
@@ -723,6 +768,7 @@ def annotate_vertical_bars(
     positive_offset: float = 0.015,
     negative_offset: float = 0.055,
     reference_values=None,
+    zero_marker_height: float = 0.008,
 ):
     if errors is None:
         errors = [0.0] * len(values)
@@ -731,7 +777,7 @@ def annotate_vertical_bars(
 
     for bar, value, error, reference_value in zip(bars, values, errors, reference_values):
         if np.isclose(value, 0.0):
-            draw_zero_marker(ax, bar, bar.get_facecolor())
+            draw_zero_marker(ax, bar, bar.get_facecolor(), height=zero_marker_height)
 
         if value >= 0:
             top_reference = value + error
@@ -1323,6 +1369,38 @@ def load_accuracy_test_backend_result(
 
 
 def build_memory_inaccuracy_summary(results) -> dict:
+    def combine_backend_circuits(result):
+        circuits = result.get("circuits", {})
+        combined = {}
+        for base_agent_name in STANDARD_AGENT_NAMES:
+            init0_label = f"{base_agent_name}{ACCURACY_TEST_SUFFIX_INIT0}"
+            init1_label = f"{base_agent_name}{ACCURACY_TEST_SUFFIX_INIT1}"
+            if init0_label not in circuits or init1_label not in circuits:
+                continue
+
+            init0 = circuits[init0_label]
+            init1 = circuits[init1_label]
+            combined_accuracy = 0.5 * (init0["accuracy"] + init1["accuracy"])
+            combined_inaccuracy = 0.5 * (init0["inaccuracy"] + init1["inaccuracy"])
+            combined_accuracy_stderr = 0.5 * np.sqrt(
+                init0["accuracy_stderr"] ** 2 + init1["accuracy_stderr"] ** 2
+            )
+            combined_inaccuracy_stderr = 0.5 * np.sqrt(
+                init0["inaccuracy_stderr"] ** 2 + init1["inaccuracy_stderr"] ** 2
+            )
+            combined[base_agent_name] = {
+                "mean_init_accuracy": combined_accuracy,
+                "mean_init_accuracy_stderr": combined_accuracy_stderr,
+                "epsilon": combined_inaccuracy,
+                "epsilon_stderr": combined_inaccuracy_stderr,
+                "init0_accuracy": init0["accuracy"],
+                "init0_accuracy_stderr": init0["accuracy_stderr"],
+                "init1_accuracy": init1["accuracy"],
+                "init1_accuracy_stderr": init1["accuracy_stderr"],
+                "shots": int(init0["shots"] + init1["shots"]),
+            }
+        return combined
+
     selected_inputs = []
     for result in results:
         selected_inputs.append({
@@ -1351,6 +1429,7 @@ def build_memory_inaccuracy_summary(results) -> dict:
             {
                 "label": result["label"],
                 "display_label": result["display_label"],
+                "axis_label": result["axis_label"],
                 "backend_name": result["backend_name"],
                 "available": bool(result.get("available", True)),
                 "error": result.get("error"),
@@ -1359,10 +1438,94 @@ def build_memory_inaccuracy_summary(results) -> dict:
                 "run_names": list(result["run_names"]),
                 "source_result_paths": [str(path) for path in result.get("source_result_paths", [])],
                 "circuits": result.get("circuits", {}),
+                "combined_agents": combine_backend_circuits(result),
             }
             for result in results
         ],
     }
+
+
+def lookup_combined_memory_epsilon(memory_inaccuracy_summary, backend_label: str, agent_name: str) -> Optional[float]:
+    if memory_inaccuracy_summary is None:
+        return None
+
+    backend_result = next(
+        (
+            backend
+            for backend in memory_inaccuracy_summary.get("backends", [])
+            if backend.get("label") == backend_label
+        ),
+        None,
+    )
+    if backend_result is None:
+        return None
+
+    combined = backend_result.get("combined_agents", {}).get(agent_name)
+    if combined is None:
+        return None
+
+    epsilon = combined.get("epsilon")
+    if epsilon is None or not np.isfinite(epsilon):
+        return None
+    return float(epsilon)
+
+
+def plot_combined_memory_epsilon(memory_inaccuracy_summary, output_dir: Path) -> Path:
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    agent_names = STANDARD_AGENT_NAMES
+    x = np.arange(len(agent_names))
+    width = 0.22
+
+    fig, ax = plt.subplots(figsize=(11.2, 6.2))
+    max_height = 0.0
+
+    for idx, backend_label in enumerate(BACKEND_LABELS):
+        backend_result = next(
+            backend for backend in memory_inaccuracy_summary["backends"]
+            if backend["label"] == backend_label
+        )
+        combined_agents = backend_result["combined_agents"]
+        values = [combined_agents.get(agent, {}).get("epsilon", np.nan) for agent in agent_names]
+        errors = [combined_agents.get(agent, {}).get("epsilon_stderr", np.nan) for agent in agent_names]
+        offsets = x + (idx - 1) * width
+        bars = ax.bar(
+            offsets,
+            values,
+            width=width,
+            yerr=errors,
+            capsize=5,
+            ecolor="#333333",
+            color=BACKEND_COLORS[backend_label],
+            edgecolor="black",
+            linewidth=1.0,
+            label=backend_result["axis_label"],
+        )
+        for value, error in zip(values, errors):
+            if np.isfinite(value) and np.isfinite(error):
+                max_height = max(max_height, value + error)
+        annotate_vertical_bars(
+            ax,
+            bars,
+            values,
+            errors=errors,
+            upper_cap=None,
+            positive_offset=0.0015,
+            zero_marker_height=0.0002,
+        )
+
+    ax.set_xticks(x)
+    ax.set_xticklabels(agent_names, rotation=0, ha="center")
+    label_offset = max(0.0015, 0.08 * max_height)
+    ax.set_ylim(0.0, max(0.02, max_height + 3.5 * label_offset))
+    style_bar_axes(ax, r"$P(c \neq a \mid x=1)$ estimate", r"$P(c \neq a \mid x=1)$")
+    ax.legend(loc="upper right", fontsize=10, frameon=True)
+    fig.tight_layout()
+
+    plot_path = output_dir / "combined_memory_initialization_epsilon_comparison.png"
+    fig.savefig(plot_path, dpi=300, bbox_inches="tight")
+    plt.close(fig)
+    return plot_path
 
 
 def plot_born_rule_accuracy(results, output_dir: Path) -> Path:
@@ -1518,7 +1681,7 @@ def plot_always_large_vs_betting_payoff_comparison(results, output_dir: Path) ->
     return plot_path
 
 
-def plot_backend_lf_correlator_comparisons(results, output_dir: Path, backend_label: str):
+def plot_backend_lf_correlator_comparisons(results, output_dir: Path, backend_label: str, memory_inaccuracy_summary=None):
     output_dir.mkdir(parents=True, exist_ok=True)
 
     backend_filename_prefix = backend_label.lower().replace(" ", "_")
@@ -1532,6 +1695,8 @@ def plot_backend_lf_correlator_comparisons(results, output_dir: Path, backend_la
 
     for agent_name in LF_AGENT_NAMES:
         backend_series = load_backend_lf_series(results, backend_label, agent_name)
+        epsilon = lookup_combined_memory_epsilon(memory_inaccuracy_summary, backend_label, agent_name)
+        four_epsilon = None if epsilon is None else 4.0 * epsilon
         s_summary = backend_series["_s_summary"]
         run_count = backend_series["_run_count"]
 
@@ -1651,7 +1816,7 @@ def plot_backend_lf_correlator_comparisons(results, output_dir: Path, backend_la
             cumulative_errors.append(np.sqrt(cumulative_variance))
 
         threshold_ymin = 0.0
-        threshold_ymax = 0.92
+        threshold_ymax = 0.97
         for threshold in [0.0, tsirelson_violation]:
             ax2.axvline(
                 x=threshold,
@@ -1660,6 +1825,26 @@ def plot_backend_lf_correlator_comparisons(results, output_dir: Path, backend_la
                 ymin=threshold_ymin,
                 ymax=threshold_ymax,
                 zorder=5,
+            )
+        if four_epsilon is not None:
+            line_top_y = -1.0 + threshold_ymax * (1.0 - (-1.0))
+            ax2.axvline(
+                x=four_epsilon,
+                color="black",
+                linewidth=2.0,
+                ymin=threshold_ymin,
+                ymax=threshold_ymax,
+                zorder=6,
+            )
+            ax2.text(
+                four_epsilon + 0.015,
+                line_top_y,
+                f"$4\\epsilon$ = {four_epsilon:.3f}",
+                ha="left",
+                va="top",
+                fontsize=9,
+                zorder=7,
+                bbox={"facecolor": "white", "edgecolor": "none", "alpha": 0.9, "pad": 1.0},
             )
 
         final_sigma = s_summary["stderr"]
@@ -1701,6 +1886,8 @@ def plot_backend_lf_correlator_comparisons(results, output_dir: Path, backend_la
         )
 
         right_limit = max(tsirelson_violation + 0.12, final_text_x + 0.42)
+        if four_epsilon is not None:
+            right_limit = max(right_limit, four_epsilon + 0.12)
         ax2.set_xlim(violation_offset, right_limit)
         ax2.set_ylim(-1, 1)
         ax2.set_yticks([])
@@ -1721,7 +1908,7 @@ def plot_backend_lf_correlator_comparisons(results, output_dir: Path, backend_la
     return saved_paths
 
 
-def plot_hardware_lf_comparison_per_agent(results, output_dir: Path):
+def plot_hardware_lf_comparison_per_agent(results, output_dir: Path, memory_inaccuracy_summary=None):
     output_dir.mkdir(parents=True, exist_ok=True)
 
     saved_paths = []
@@ -1737,6 +1924,7 @@ def plot_hardware_lf_comparison_per_agent(results, output_dir: Path):
     for agent_name in LF_AGENT_NAMES:
         fake_series = load_backend_lf_series(results, "Fake hardware", agent_name)
         real_series = load_backend_lf_series(results, "Real hardware", agent_name)
+        real_epsilon = lookup_combined_memory_epsilon(memory_inaccuracy_summary, "Real hardware", agent_name)
         fake_s_summary = fake_series["_s_summary"]
         real_s_summary = real_series["_s_summary"]
         fake_run_count = fake_series["_run_count"]
@@ -1939,10 +2127,10 @@ def plot_hardware_lf_comparison_per_agent(results, output_dir: Path):
                 zorder=7,
                 bbox={"facecolor": "white", "edgecolor": "none", "alpha": 0.9, "pad": 1.5},
             )
-            max_right_limit = max(max_right_limit, final_text_x + 0.40)
+            max_right_limit = max(max_right_limit, final_text_x + 0.34)
 
         threshold_ymin = 0.0
-        threshold_ymax = 0.94
+        threshold_ymax = 0.97
         for threshold in [0.0, tsirelson_violation]:
             ax2.axvline(
                 x=threshold,
@@ -1952,6 +2140,28 @@ def plot_hardware_lf_comparison_per_agent(results, output_dir: Path):
                 ymax=threshold_ymax,
                 zorder=5,
             )
+        if real_epsilon is not None:
+            four_epsilon = 4.0 * real_epsilon
+            line_top_y = -0.55 + threshold_ymax * (0.55 - (-0.55))
+            ax2.axvline(
+                x=four_epsilon,
+                color="black",
+                linewidth=2.0,
+                ymin=threshold_ymin,
+                ymax=threshold_ymax,
+                zorder=6,
+            )
+            ax2.text(
+                four_epsilon + 0.015,
+                line_top_y,
+                f"$4\\epsilon$ = {four_epsilon:.3f}",
+                ha="left",
+                va="top",
+                fontsize=9,
+                zorder=7,
+                bbox={"facecolor": "white", "edgecolor": "none", "alpha": 0.9, "pad": 1.0},
+            )
+            max_right_limit = max(max_right_limit, four_epsilon + 0.14)
 
         ax2.set_xlim(violation_offset, max_right_limit)
         ax2.set_ylim(-0.55, 0.55)
@@ -1988,7 +2198,7 @@ def plot_hardware_lf_comparison_per_agent(results, output_dir: Path):
         ax2.set_xticklabels(["-2", "0", r"$2\sqrt{2}-2$"], fontsize=12)
         ax2.spines["bottom"].set_linewidth(1.5)
 
-        fig.subplots_adjust(left=0.22, right=0.97, top=0.92, bottom=0.10, hspace=0.18)
+        fig.subplots_adjust(left=0.22, right=0.992, top=0.92, bottom=0.10, hspace=0.18)
 
         plot_path = output_dir / f"hardware_comparison_{agent_label_to_filename(agent_name)}_lf_correlator_comparison.png"
         fig.savefig(plot_path, dpi=300, bbox_inches="tight")
@@ -2257,13 +2467,15 @@ def main():
     accuracy_dir = output_dir / "accuracy"
     reflex_agreement_dir = accuracy_dir / "reflex_agreement"
     comparison_dir = output_dir / "comparison"
+    memory_initialization_dir = output_dir / "memory_initialization"
     correlators_dir = output_dir / "correlators_and_lf_values"
     correlators_noiseless_dir = correlators_dir / "noiseless"
     correlators_fake_dir = correlators_dir / "fake_hardware"
     correlators_real_dir = correlators_dir / "real_hardware"
     correlators_comparison_dir = correlators_dir / "comparison"
-    memory_inaccuracy_path = output_dir / "memory_inaccuracy.json"
-    save_json(memory_inaccuracy_path, build_memory_inaccuracy_summary(memory_inaccuracy_results))
+    memory_inaccuracy_summary = build_memory_inaccuracy_summary(memory_inaccuracy_results)
+    memory_inaccuracy_folder_path = memory_initialization_dir / "memory_inaccuracy.json"
+    save_json(memory_inaccuracy_folder_path, memory_inaccuracy_summary)
 
     born_rule_accuracy_plot_path = plot_born_rule_accuracy(results, accuracy_dir)
     save_plot_metadata(
@@ -2276,19 +2488,38 @@ def main():
         build_payoff_comparison_metadata(results),
     )
     lf_correlator_plot_paths = []
-    noiseless_lf_plot_paths = plot_backend_lf_correlator_comparisons(results, correlators_noiseless_dir, "Noiseless")
+    noiseless_lf_plot_paths = plot_backend_lf_correlator_comparisons(
+        results,
+        correlators_noiseless_dir,
+        "Noiseless",
+        memory_inaccuracy_summary,
+    )
     for plot_path, agent_name in zip(noiseless_lf_plot_paths, LF_AGENT_NAMES):
         save_plot_metadata(plot_path, build_backend_lf_plot_metadata(results, "Noiseless", agent_name))
     lf_correlator_plot_paths.extend(noiseless_lf_plot_paths)
-    real_lf_plot_paths = plot_backend_lf_correlator_comparisons(results, correlators_real_dir, "Real hardware")
+    real_lf_plot_paths = plot_backend_lf_correlator_comparisons(
+        results,
+        correlators_real_dir,
+        "Real hardware",
+        memory_inaccuracy_summary,
+    )
     for plot_path, agent_name in zip(real_lf_plot_paths, LF_AGENT_NAMES):
         save_plot_metadata(plot_path, build_backend_lf_plot_metadata(results, "Real hardware", agent_name))
     lf_correlator_plot_paths.extend(real_lf_plot_paths)
-    fake_lf_plot_paths = plot_backend_lf_correlator_comparisons(results, correlators_fake_dir, "Fake hardware")
+    fake_lf_plot_paths = plot_backend_lf_correlator_comparisons(
+        results,
+        correlators_fake_dir,
+        "Fake hardware",
+        memory_inaccuracy_summary,
+    )
     for plot_path, agent_name in zip(fake_lf_plot_paths, LF_AGENT_NAMES):
         save_plot_metadata(plot_path, build_backend_lf_plot_metadata(results, "Fake hardware", agent_name))
     lf_correlator_plot_paths.extend(fake_lf_plot_paths)
-    hardware_comparison_lf_plot_paths = plot_hardware_lf_comparison_per_agent(results, correlators_comparison_dir)
+    hardware_comparison_lf_plot_paths = plot_hardware_lf_comparison_per_agent(
+        results,
+        correlators_comparison_dir,
+        memory_inaccuracy_summary,
+    )
     for plot_path, agent_name in zip(hardware_comparison_lf_plot_paths, LF_AGENT_NAMES):
         save_plot_metadata(plot_path, build_hardware_lf_comparison_metadata(results, agent_name))
     guessing_plot_path = plot_guessing_accuracy(results, accuracy_dir)
@@ -2347,6 +2578,14 @@ def main():
             ylabel="Always-3/4 accuracy",
         ),
     )
+    combined_memory_epsilon_plot_path = plot_combined_memory_epsilon(
+        memory_inaccuracy_summary,
+        memory_initialization_dir,
+    )
+    save_plot_metadata(
+        combined_memory_epsilon_plot_path,
+        build_memory_epsilon_plot_metadata(memory_inaccuracy_results),
+    )
     print_selection_summary(results)
     print_payoff_summary(results)
     print_guessing_summary(results)
@@ -2363,7 +2602,8 @@ def main():
     print(f"Saved reflex accuracy plot to: {reflex_plot_path}")
     print(f"Saved reflex S_c/M agreement accuracy plot to: {reflex_sc_m_plot_path}")
     print(f"Saved always-3/4 accuracy plot to: {always_large_accuracy_plot_path}")
-    print(f"Saved memory inaccuracy summary to: {memory_inaccuracy_path}")
+    print(f"Saved memory inaccuracy summary to: {memory_inaccuracy_folder_path}")
+    print(f"Saved combined memory epsilon plot to: {combined_memory_epsilon_plot_path}")
     for result in memory_inaccuracy_results:
         if not result.get("available", True):
             print(f"Memory inaccuracy unavailable for {result['display_label']}: {result['error']}")
