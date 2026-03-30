@@ -81,6 +81,9 @@ MANUAL_LAYOUTS_BY_BACKEND = {
 
 OPT_LEVEL = 0
 ACCURACY_TEST_INFIX = "_accuracy_test_"
+SHARED_LAYOUT_REFERENCE = {
+    "Always 3/4 Agent": "Betting Agent",
+}
 
 
 def safe_label(label: str) -> str:
@@ -139,15 +142,24 @@ def get_manual_layout(backend_name, circuit_qubit_count):
 
 def resolve_layout_reference(agent_name, qc):
     """Use the parent agent circuit as the layout reference for accuracy-test circuits."""
-    if ACCURACY_TEST_INFIX not in agent_name:
-        return agent_name, qc
+    layout_agent_name = agent_name
+    layout_qc = qc
 
-    parent_agent_name = agent_name.split(ACCURACY_TEST_INFIX, 1)[0]
-    for known_agent_name, build_fn in AGENTS:
-        if known_agent_name == parent_agent_name:
-            return parent_agent_name, build_fn()
+    if ACCURACY_TEST_INFIX in agent_name:
+        parent_agent_name = agent_name.split(ACCURACY_TEST_INFIX, 1)[0]
+        for known_agent_name, build_fn in AGENTS:
+            if known_agent_name == parent_agent_name:
+                layout_agent_name = parent_agent_name
+                layout_qc = build_fn()
+                break
 
-    return agent_name, qc
+    shared_layout_agent_name = SHARED_LAYOUT_REFERENCE.get(layout_agent_name)
+    if shared_layout_agent_name is not None:
+        for known_agent_name, build_fn in AGENTS:
+            if known_agent_name == shared_layout_agent_name:
+                return shared_layout_agent_name, build_fn()
+
+    return layout_agent_name, layout_qc
 
 
 def get_initial_layout(agent_name, qc, backend):

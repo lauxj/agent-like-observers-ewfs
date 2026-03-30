@@ -31,9 +31,9 @@ PLOTS_ROOT = PROJECT_ROOT / "results" / "plots" / "plots_agent_evaluation"
 # across runs and the displayed error bars become the SEM of the run-level
 # values.
 EVALUATION_LAST_N = {
-    "Noiseless": 1,
-    "Fake hardware": 5,
-    "Real hardware": 5,
+    "Noiseless": 10,
+    "Fake hardware": 10,
+    "Real hardware": 10,
 }
 # if paths are inserted here, they will be used instead of the above logic
 # EVALUATION_RUN_PATHS = {
@@ -95,6 +95,7 @@ REFLEX_M_INDEX_FROM_LEFT = 3
 
 LF_AGENT_NAMES = ["Betting Agent", "Guessing Agent", "Reflex Agent", "Always 3/4 Agent"]
 STANDARD_AGENT_NAMES = LF_AGENT_NAMES
+MEMORY_PLOT_AGENT_NAMES = ["Reflex Agent", "Guessing Agent", "Betting Agent", "Always 3/4 Agent"]
 LF_TERM_SPECS = [
     ("E11", -1.0, r"$-\langle A_1 B_1 \rangle$"),
     ("E12", 1.0, r"$\langle A_1 B_2 \rangle$"),
@@ -585,7 +586,7 @@ def build_memory_epsilon_plot_metadata(memory_inaccuracy_results):
         backend["label"]: backend
         for backend in summary["backends"]
     }
-    for agent_name in STANDARD_AGENT_NAMES:
+    for agent_name in MEMORY_PLOT_AGENT_NAMES:
         category = {"agent_name": agent_name, "series": []}
         for backend_label in BACKEND_LABELS:
             backend = backend_map[backend_label]
@@ -1473,7 +1474,7 @@ def lookup_combined_memory_epsilon(memory_inaccuracy_summary, backend_label: str
 def plot_combined_memory_epsilon(memory_inaccuracy_summary, output_dir: Path) -> Path:
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    agent_names = STANDARD_AGENT_NAMES
+    agent_names = MEMORY_PLOT_AGENT_NAMES
     x = np.arange(len(agent_names))
     width = 0.22
 
