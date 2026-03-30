@@ -19,7 +19,10 @@ except ImportError:
 
 ACCURACY_TEST_SUFFIX_INIT0 = "_accuracy_test_init0"
 ACCURACY_TEST_SUFFIX_INIT1 = "_accuracy_test_init1"
+REFLEX_ACCURACY_M_EXTRA_DELAY_DT = 83
+GUESSING_ACCURACY_M1_EXTRA_DELAY_DT = 96
 BETTING_ACCURACY_M1_EXTRA_DELAY_DT = 115
+ALWAYS_LARGE_ACCURACY_M1_EXTRA_DELAY_DT = 121
 
 
 def _initialize_memory_bit(qc: QuantumCircuit, memory_qubit, init_bit: int) -> None:
@@ -75,6 +78,7 @@ def _build_circuit_reflex_accuracy_test(init_bit: int) -> QuantumCircuit:
         qc.ry(beta2, qr_SD[0])
 
     qc.barrier(qr_SD, qr_SC, qr_M, qr_L, qr_A_choice, qr_B_choice)
+    qc.delay(REFLEX_ACCURACY_M_EXTRA_DELAY_DT, qr_M[0], unit="dt")
     qc.measure(qr_M[0], c[2])
     qc.measure(qr_SC[0], c[3])
     qc.measure(qr_SD[0], c[4])
@@ -133,6 +137,7 @@ def _build_circuit_guessing_accuracy_test(init_bit: int) -> QuantumCircuit:
         qc.ry(beta2, qr_SD[0])
 
     qc.barrier(qr_SD, qr_SC, qr_M1, qr_M2, qr_G, qr_A_choice, qr_B_choice)
+    qc.delay(GUESSING_ACCURACY_M1_EXTRA_DELAY_DT, qr_M1[0], unit="dt")
     qc.measure(qr_M1[0], c[2])
     qc.measure(qr_SC[0], c[3])
     qc.measure(qr_SD[0], c[4])
@@ -263,6 +268,7 @@ def _build_circuit_always_large_accuracy_test(init_bit: int) -> QuantumCircuit:
         qc.ry(beta2, qr_SD[0])
 
     qc.barrier(qr_SC[0], qr_SD[0], qr_M1[0], qr_M2[0], qr_W0[0], qr_W1[0], qr_A_choice[0], qr_B_choice[0])
+    qc.delay(ALWAYS_LARGE_ACCURACY_M1_EXTRA_DELAY_DT, qr_M1[0], unit="dt")
     qc.measure(qr_M1[0], c[2])
     qc.measure(qr_SC[0], c[3])
     qc.measure(qr_SD[0], c[4])
