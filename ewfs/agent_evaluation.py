@@ -1,3 +1,7 @@
+""" 
+Plotting script for evaluation of the data and runs.
+"""
+
 import argparse
 import json
 from collections import defaultdict
@@ -18,39 +22,14 @@ DATA_DIR_FAKE = PROJECT_ROOT / "data" / "data_fake_hardware"
 PLOTS_ROOT = PROJECT_ROOT / "results" / "plots" / "plots_agent_evaluation"
 
 # -----------------------------------------------------------------------------
-# Evaluation selection defaults
-#
-# Set only one number per data bucket:
-#   - 1: use the newest single run, matching the old behaviour
-#   - N > 1: use the newest N runs and average them
-#
-# Optional:
-#   - set run folder paths here to use exact runs instead
-#
-# If multiple runs are selected, scalar metrics and LF correlators are averaged
-# across runs and the displayed error bars become the SEM of the run-level
-# values.
+# Set number of runs that should be considered
+# takes the n-latest runs (so make sure the n-latest are from one backend and close to each other in time)
 EVALUATION_LAST_N = {
     "Noiseless": 10,
     "Fake hardware": 10,
     "Real hardware": 10,
 }
 # if paths are inserted here, they will be used instead of the above logic
-# EVALUATION_RUN_PATHS = {
-#     "Noiseless": [],
-#     "Fake hardware": ["/Users/joshua/PycharmProjects/masters_thesis_project/data/data_fake_hardware/ibm_kingston_20260324_165844",
-#                       "/Users/joshua/PycharmProjects/masters_thesis_project/data/data_fake_hardware/ibm_kingston_20260324_170126",
-#                       "/Users/joshua/PycharmProjects/masters_thesis_project/data/data_fake_hardware/ibm_kingston_20260324_170250",
-#                       "/Users/joshua/PycharmProjects/masters_thesis_project/data/data_fake_hardware/ibm_kingston_20260324_170354",
-#                       "/Users/joshua/PycharmProjects/masters_thesis_project/data/data_fake_hardware/ibm_kingston_20260324_170549"
-#                       ],
-#     "Real hardware": ["/Users/joshua/PycharmProjects/masters_thesis_project/data/data_real_hardware/ibm_kingston_20260324_165849",
-#                       "/Users/joshua/PycharmProjects/masters_thesis_project/data/data_real_hardware/ibm_kingston_20260324_170130",
-#                       "/Users/joshua/PycharmProjects/masters_thesis_project/data/data_real_hardware/ibm_kingston_20260324_170254",
-#                       "/Users/joshua/PycharmProjects/masters_thesis_project/data/data_real_hardware/ibm_kingston_20260324_170359",
-#                       "/Users/joshua/PycharmProjects/masters_thesis_project/data/data_real_hardware/ibm_kingston_20260324_170553"],
-# }
-
 EVALUATION_RUN_PATHS = {
     "Noiseless": [],
     "Fake hardware": [],
@@ -150,6 +129,52 @@ PAYOFF_COLORS = [
     THEORY_COMPARISON_COLORS["Always 1/4"],
     THEORY_COMPARISON_COLORS["Always 3/4"],
 ]
+ACCURACY_METRIC_SPECS = {
+    "guessing_accuracy": {
+        "value_key": "guessing_accuracy",
+        "error_key": "guessing_accuracy_stderr",
+        "shots_key": "guessing_accuracy_shots",
+        "title": "Guessing Agent Accuracy",
+        "ylabel": "Guess accuracy",
+        "ideal_value": 0.75,
+        "ideal_label": "Ideal accuracy = 0.75",
+        "filename": "guessing_agent_accuracy_comparison.png",
+        "summary_title": "\nGuessing agent accuracy:",
+    },
+    "reflex_accuracy": {
+        "value_key": "reflex_accuracy",
+        "error_key": "reflex_accuracy_stderr",
+        "shots_key": "reflex_accuracy_shots",
+        "title": "Reflex Agent Accuracy",
+        "ylabel": "Reflex accuracy",
+        "ideal_value": 1.0,
+        "ideal_label": "Ideal accuracy = 1.0",
+        "filename": "reflex_agent_accuracy_comparison.png",
+        "summary_title": "\nReflex agent accuracy:",
+    },
+    "reflex_sc_m_accuracy": {
+        "value_key": "reflex_sc_m_accuracy",
+        "error_key": "reflex_sc_m_accuracy_stderr",
+        "shots_key": "reflex_sc_m_accuracy_shots",
+        "title": r"Reflex Agent: $S_c$ and $M$ Agreement",
+        "ylabel": r"$P(M=S_c)$",
+        "ideal_value": 1.0,
+        "ideal_label": r"Ideal agreement = 1.0",
+        "filename": "reflex_agent_sc_m_agreement_accuracy.png",
+        "summary_title": "\nReflex agent S_c/M agreement accuracy:",
+    },
+    "always_large_accuracy": {
+        "value_key": "always_large_accuracy",
+        "error_key": "always_large_accuracy_stderr",
+        "shots_key": "always_large_accuracy_shots",
+        "title": "Always-3/4 Agent Accuracy",
+        "ylabel": "Always-3/4 accuracy",
+        "ideal_value": 1.0,
+        "ideal_label": "Ideal accuracy = 1.0",
+        "filename": "always_3_4_agent_accuracy_comparison.png",
+        "summary_title": "\nAlways-3/4 agent accuracy:",
+    },
+}
 
 
 def style_bar_axes(ax, title: str, ylabel: str):
@@ -566,6 +591,20 @@ def build_accuracy_plot_metadata(
         for result in results
     ]
     return metadata
+
+
+def build_accuracy_plot_metadata_for_metric(results, metric_key: str):
+    spec = ACCURACY_METRIC_SPECS[metric_key]
+    return build_accuracy_plot_metadata(
+        results,
+        plot_type=metric_key,
+        title=spec["title"],
+        value_key=spec["value_key"],
+        error_key=spec["error_key"],
+        ideal_value=spec["ideal_value"],
+        ideal_label=spec["ideal_label"],
+        ylabel=spec["ylabel"],
+    )
 
 
 def build_memory_epsilon_plot_metadata(memory_inaccuracy_results):
@@ -1446,6 +1485,28 @@ def build_memory_inaccuracy_summary(results) -> dict:
     }
 
 
+def missing_accuracy_test_result(label: str, main_result: dict, error: FileNotFoundError) -> dict:
+    return {
+        "label": label,
+        "available": False,
+        "backend_name": main_result["backend_name"],
+        "display_label": main_result["display_label"],
+        "axis_label": main_result["axis_label"],
+        "run_dir": main_result["run_dir"],
+        "run_dirs": main_result["run_dirs"],
+        "run_name": main_result["run_name"],
+        "run_names": main_result["run_names"],
+        "run_count": main_result["run_count"],
+        "selection_mode": f"{main_result['selection_mode']}_missing_accuracy_test_data",
+        "source_result_paths": [],
+        "raw_shots_per_run": [],
+        "raw_shots_total": 0,
+        "agents": {},
+        "circuits": {},
+        "error": str(error),
+    }
+
+
 def lookup_combined_memory_epsilon(memory_inaccuracy_summary, backend_label: str, agent_name: str) -> Optional[float]:
     if memory_inaccuracy_summary is None:
         return None
@@ -2274,60 +2335,67 @@ def plot_accuracy_comparison(
     return plot_path
 
 
-def plot_guessing_accuracy(results, output_dir: Path) -> Path:
+def plot_accuracy_metric(results, output_dir: Path, metric_key: str) -> Path:
+    spec = ACCURACY_METRIC_SPECS[metric_key]
     return plot_accuracy_comparison(
         results,
         output_dir,
-        value_key="guessing_accuracy",
-        error_key="guessing_accuracy_stderr",
-        title="Guessing Agent Accuracy",
-        ylabel="Guess accuracy",
-        ideal_value=0.75,
-        ideal_label="Ideal accuracy = 0.75",
-        filename="guessing_agent_accuracy_comparison.png",
+        value_key=spec["value_key"],
+        error_key=spec["error_key"],
+        title=spec["title"],
+        ylabel=spec["ylabel"],
+        ideal_value=spec["ideal_value"],
+        ideal_label=spec["ideal_label"],
+        filename=spec["filename"],
     )
+
+
+def save_accuracy_metric_plot(results, output_dir: Path, metric_key: str) -> Path:
+    plot_path = plot_accuracy_metric(results, output_dir, metric_key)
+    save_plot_metadata(plot_path, build_accuracy_plot_metadata_for_metric(results, metric_key))
+    return plot_path
+
+
+def save_backend_lf_plot_group(results, output_dir: Path, backend_label: str, memory_inaccuracy_summary=None):
+    plot_paths = plot_backend_lf_correlator_comparisons(
+        results,
+        output_dir,
+        backend_label,
+        memory_inaccuracy_summary,
+    )
+    for plot_path, agent_name in zip(plot_paths, LF_AGENT_NAMES):
+        save_plot_metadata(plot_path, build_backend_lf_plot_metadata(results, backend_label, agent_name))
+    return plot_paths
+
+
+def plot_guessing_accuracy(results, output_dir: Path) -> Path:
+    return plot_accuracy_metric(results, output_dir, "guessing_accuracy")
 
 
 def plot_reflex_accuracy(results, output_dir: Path) -> Path:
-    return plot_accuracy_comparison(
-        results,
-        output_dir,
-        value_key="reflex_accuracy",
-        error_key="reflex_accuracy_stderr",
-        title="Reflex Agent Accuracy",
-        ylabel="Reflex accuracy",
-        ideal_value=1.0,
-        ideal_label="Ideal accuracy = 1.0",
-        filename="reflex_agent_accuracy_comparison.png",
-    )
+    return plot_accuracy_metric(results, output_dir, "reflex_accuracy")
 
 
 def plot_always_large_accuracy(results, output_dir: Path) -> Path:
-    return plot_accuracy_comparison(
-        results,
-        output_dir,
-        value_key="always_large_accuracy",
-        error_key="always_large_accuracy_stderr",
-        title="Always-3/4 Agent Accuracy",
-        ylabel="Always-3/4 accuracy",
-        ideal_value=1.0,
-        ideal_label="Ideal accuracy = 1.0",
-        filename="always_3_4_agent_accuracy_comparison.png",
-    )
+    return plot_accuracy_metric(results, output_dir, "always_large_accuracy")
 
 
 def plot_reflex_sc_m_accuracy(results, output_dir: Path) -> Path:
-    return plot_accuracy_comparison(
-        results,
-        output_dir,
-        value_key="reflex_sc_m_accuracy",
-        error_key="reflex_sc_m_accuracy_stderr",
-        title=r"Reflex Agent: $S_c$ and $M$ Agreement",
-        ylabel=r"$P(M=S_c)$",
-        ideal_value=1.0,
-        ideal_label=r"Ideal agreement = 1.0",
-        filename="reflex_agent_sc_m_agreement_accuracy.png",
-    )
+    return plot_accuracy_metric(results, output_dir, "reflex_sc_m_accuracy")
+
+
+def print_accuracy_metric_summary(results, metric_key: str):
+    spec = ACCURACY_METRIC_SPECS[metric_key]
+    value_key = spec["value_key"]
+    error_key = spec["error_key"]
+    shots_key = spec["shots_key"]
+    print(spec["summary_title"])
+    for result in results:
+        print(
+            f"  {result_display_label(result)}: {result[value_key]:.4f} "
+            f"+/- {result[error_key]:.4f} "
+            f"(n={result[shots_key]})"
+        )
 
 
 def print_payoff_summary(results):
@@ -2346,43 +2414,19 @@ def print_payoff_summary(results):
 
 
 def print_guessing_summary(results):
-    print("\nGuessing agent accuracy:")
-    for result in results:
-        print(
-            f"  {result_display_label(result)}: {result['guessing_accuracy']:.4f} "
-            f"+/- {result['guessing_accuracy_stderr']:.4f} "
-            f"(n={result['guessing_accuracy_shots']})"
-        )
+    print_accuracy_metric_summary(results, "guessing_accuracy")
 
 
 def print_reflex_summary(results):
-    print("\nReflex agent accuracy:")
-    for result in results:
-        print(
-            f"  {result_display_label(result)}: {result['reflex_accuracy']:.4f} "
-            f"+/- {result['reflex_accuracy_stderr']:.4f} "
-            f"(n={result['reflex_accuracy_shots']})"
-        )
+    print_accuracy_metric_summary(results, "reflex_accuracy")
 
 
 def print_reflex_sc_m_summary(results):
-    print("\nReflex agent S_c/M agreement accuracy:")
-    for result in results:
-        print(
-            f"  {result_display_label(result)}: {result['reflex_sc_m_accuracy']:.4f} "
-            f"+/- {result['reflex_sc_m_accuracy_stderr']:.4f} "
-            f"(n={result['reflex_sc_m_accuracy_shots']})"
-        )
+    print_accuracy_metric_summary(results, "reflex_sc_m_accuracy")
 
 
 def print_always_large_summary(results):
-    print("\nAlways-3/4 agent accuracy:")
-    for result in results:
-        print(
-            f"  {result_display_label(result)}: {result['always_large_accuracy']:.4f} "
-            f"+/- {result['always_large_accuracy_stderr']:.4f} "
-            f"(n={result['always_large_accuracy_shots']})"
-        )
+    print_accuracy_metric_summary(results, "always_large_accuracy")
 
 
 def print_selection_summary(results):
@@ -2444,25 +2488,7 @@ def main():
                 )
             )
         except FileNotFoundError as exc:
-            memory_inaccuracy_results.append({
-                "label": label,
-                "available": False,
-                "backend_name": main_result["backend_name"],
-                "display_label": main_result["display_label"],
-                "axis_label": main_result["axis_label"],
-                "run_dir": main_result["run_dir"],
-                "run_dirs": main_result["run_dirs"],
-                "run_name": main_result["run_name"],
-                "run_names": main_result["run_names"],
-                "run_count": main_result["run_count"],
-                "selection_mode": f"{main_result['selection_mode']}_missing_accuracy_test_data",
-                "source_result_paths": [],
-                "raw_shots_per_run": [],
-                "raw_shots_total": 0,
-                "agents": {},
-                "circuits": {},
-                "error": str(exc),
-            })
+            memory_inaccuracy_results.append(missing_accuracy_test_result(label, main_result, exc))
 
     output_dir = build_output_dir()
     accuracy_dir = output_dir / "accuracy"
@@ -2489,32 +2515,26 @@ def main():
         build_payoff_comparison_metadata(results),
     )
     lf_correlator_plot_paths = []
-    noiseless_lf_plot_paths = plot_backend_lf_correlator_comparisons(
+    noiseless_lf_plot_paths = save_backend_lf_plot_group(
         results,
         correlators_noiseless_dir,
         "Noiseless",
         memory_inaccuracy_summary,
     )
-    for plot_path, agent_name in zip(noiseless_lf_plot_paths, LF_AGENT_NAMES):
-        save_plot_metadata(plot_path, build_backend_lf_plot_metadata(results, "Noiseless", agent_name))
     lf_correlator_plot_paths.extend(noiseless_lf_plot_paths)
-    real_lf_plot_paths = plot_backend_lf_correlator_comparisons(
+    real_lf_plot_paths = save_backend_lf_plot_group(
         results,
         correlators_real_dir,
         "Real hardware",
         memory_inaccuracy_summary,
     )
-    for plot_path, agent_name in zip(real_lf_plot_paths, LF_AGENT_NAMES):
-        save_plot_metadata(plot_path, build_backend_lf_plot_metadata(results, "Real hardware", agent_name))
     lf_correlator_plot_paths.extend(real_lf_plot_paths)
-    fake_lf_plot_paths = plot_backend_lf_correlator_comparisons(
+    fake_lf_plot_paths = save_backend_lf_plot_group(
         results,
         correlators_fake_dir,
         "Fake hardware",
         memory_inaccuracy_summary,
     )
-    for plot_path, agent_name in zip(fake_lf_plot_paths, LF_AGENT_NAMES):
-        save_plot_metadata(plot_path, build_backend_lf_plot_metadata(results, "Fake hardware", agent_name))
     lf_correlator_plot_paths.extend(fake_lf_plot_paths)
     hardware_comparison_lf_plot_paths = plot_hardware_lf_comparison_per_agent(
         results,
@@ -2523,62 +2543,10 @@ def main():
     )
     for plot_path, agent_name in zip(hardware_comparison_lf_plot_paths, LF_AGENT_NAMES):
         save_plot_metadata(plot_path, build_hardware_lf_comparison_metadata(results, agent_name))
-    guessing_plot_path = plot_guessing_accuracy(results, accuracy_dir)
-    save_plot_metadata(
-        guessing_plot_path,
-        build_accuracy_plot_metadata(
-            results,
-            plot_type="guessing_accuracy",
-            title="Guessing Agent Accuracy",
-            value_key="guessing_accuracy",
-            error_key="guessing_accuracy_stderr",
-            ideal_value=0.75,
-            ideal_label="Ideal accuracy = 0.75",
-            ylabel="Guess accuracy",
-        ),
-    )
-    reflex_plot_path = plot_reflex_accuracy(results, accuracy_dir)
-    save_plot_metadata(
-        reflex_plot_path,
-        build_accuracy_plot_metadata(
-            results,
-            plot_type="reflex_accuracy",
-            title="Reflex Agent Accuracy",
-            value_key="reflex_accuracy",
-            error_key="reflex_accuracy_stderr",
-            ideal_value=1.0,
-            ideal_label="Ideal accuracy = 1.0",
-            ylabel="Reflex accuracy",
-        ),
-    )
-    reflex_sc_m_plot_path = plot_reflex_sc_m_accuracy(results, reflex_agreement_dir)
-    save_plot_metadata(
-        reflex_sc_m_plot_path,
-        build_accuracy_plot_metadata(
-            results,
-            plot_type="reflex_sc_m_accuracy",
-            title=r"Reflex Agent: $S_c$ and $M$ Agreement",
-            value_key="reflex_sc_m_accuracy",
-            error_key="reflex_sc_m_accuracy_stderr",
-            ideal_value=1.0,
-            ideal_label=r"Ideal agreement = 1.0",
-            ylabel=r"$P(M=S_c)$",
-        ),
-    )
-    always_large_accuracy_plot_path = plot_always_large_accuracy(results, accuracy_dir)
-    save_plot_metadata(
-        always_large_accuracy_plot_path,
-        build_accuracy_plot_metadata(
-            results,
-            plot_type="always_large_accuracy",
-            title="Always-3/4 Agent Accuracy",
-            value_key="always_large_accuracy",
-            error_key="always_large_accuracy_stderr",
-            ideal_value=1.0,
-            ideal_label="Ideal accuracy = 1.0",
-            ylabel="Always-3/4 accuracy",
-        ),
-    )
+    guessing_plot_path = save_accuracy_metric_plot(results, accuracy_dir, "guessing_accuracy")
+    reflex_plot_path = save_accuracy_metric_plot(results, accuracy_dir, "reflex_accuracy")
+    reflex_sc_m_plot_path = save_accuracy_metric_plot(results, reflex_agreement_dir, "reflex_sc_m_accuracy")
+    always_large_accuracy_plot_path = save_accuracy_metric_plot(results, accuracy_dir, "always_large_accuracy")
     combined_memory_epsilon_plot_path = plot_combined_memory_epsilon(
         memory_inaccuracy_summary,
         memory_initialization_dir,
