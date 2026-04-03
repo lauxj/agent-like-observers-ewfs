@@ -44,6 +44,7 @@ PLOT_DIR = PROJECT_ROOT / "results" / "plots" / "plots_ibm_transpilation"
 PLOT_DIR.mkdir(parents=True, exist_ok=True)
 
 BACKEND_NAME = "ibm_torino"
+# Toggle between searched layouts and the hard-coded manual layouts below.
 USE_AUTO_LAYOUT = True
 AUTO_LAYOUT_READOUT_WEIGHT = DEFAULT_READOUT_WEIGHT
 AUTO_LAYOUT_CZ_WEIGHT = DEFAULT_CZ_WEIGHT
@@ -61,9 +62,9 @@ MANUAL_LAYOUTS_BY_BACKEND = {
         8: [54, 61, 62, 60, 63, 59, 14, 129],  # Betting Agent / Always 3/4 Agent
     },
     "ibm_kingston": {
-        6: [37, 45, 46, 47, 10, 142],  # Reflex Agent
-        7: [37, 45, 46, 44, 47, 10, 142],  # Guessing Agent
-        8: [38,49,50,48,51,47, 10, 142],  # Betting Agent / Always 3/4 Agent
+        6: [66, 67, 57, 47, 8, 149],  # Reflex Agent
+        7: [66, 67, 57, 68, 47, 8, 149],  # Guessing Agent
+        8: [66, 67, 57, 68, 47, 69, 8, 149],  # Betting Agent / Always 3/4 Agent
     },
     "ibm_fez": {
         # Fill these physical qubit indices manually before running on Fez.
@@ -88,6 +89,34 @@ SHARED_LAYOUT_REFERENCE = {
 
 def safe_label(label: str) -> str:
     return "".join(ch if ch.isalnum() or ch in {"-", "_"} else "_" for ch in label).strip("_")
+
+
+def build_plot_wire_order(original_qc, transpiled_qc):
+    """Preserve the original logical qubit order when drawing transpiled circuits."""
+    transpile_layout = getattr(transpiled_qc, "layout", None)
+    initial_layout = getattr(transpile_layout, "initial_layout", None)
+    if initial_layout is None:
+        return None
+
+    physical_by_virtual = initial_layout.get_virtual_bits()
+    ordered_physical = []
+    seen_physical = set()
+
+    for qubit in original_qc.qubits:
+        physical = physical_by_virtual.get(qubit)
+        if physical is None or physical in seen_physical:
+            continue
+        ordered_physical.append(physical)
+        seen_physical.add(physical)
+
+    for qubit in transpiled_qc.qubits:
+        physical = transpiled_qc.find_bit(qubit).index
+        if physical in seen_physical:
+            continue
+        ordered_physical.append(physical)
+        seen_physical.add(physical)
+
+    return ordered_physical
 
 
 def make_run_folder_name(backend, folder_ts=None):
@@ -213,8 +242,9 @@ def transpile_agent_circuit(agent_name, build_fn, backend, save_plots=True, plot
         agent_dir.mkdir(parents=True, exist_ok=True)
         filename = f"{safe_name}_circuit_depth{tqc.depth()}_cz{cz_n}.png"
         plot_path = agent_dir / filename
+        wire_order = build_plot_wire_order(qc, tqc)
 
-        fig = circuit_drawer(tqc, output="mpl", fold=-1)
+        fig = circuit_drawer(tqc, output="mpl", fold=-1, wire_order=wire_order)
         fig.suptitle(f"{agent_name} – Transpiled Circuit", fontsize=14)
         fig.savefig(plot_path, dpi=300, bbox_inches="tight")
         plt.close(fig)

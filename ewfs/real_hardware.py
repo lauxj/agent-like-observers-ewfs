@@ -20,7 +20,7 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 DATA_DIR_REAL = PROJECT_ROOT / "data" / "data_real_hardware"
 DATA_DIR_REAL.mkdir(parents=True, exist_ok=True)
-BACKEND_NAME = "ibm_torino"
+BACKEND_NAME = "ibm_kingston"
 
 
 def make_run_folder_name(backend, folder_ts=None):
@@ -288,6 +288,6 @@ if __name__ == "__main__":
     run_real_hardware_for_backend(
         backend,
         transpiled,
-        shots=300,
+        shots=1000,
         folder_ts=folder_ts,
     )

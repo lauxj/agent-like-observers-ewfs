@@ -53,11 +53,11 @@ SAVE_IBM_TRANSPILATION_PLOTS = True
 
 # Fake hardware noise simulation
 DO_FAKE_HARDWARE_SIM = True
-FAKE_HARDWARE_SHOTS = 10_000
+FAKE_HARDWARE_SHOTS = 1_000
 
 # Real hardware
 DO_REAL_HARDWARE = True
-REAL_HARDWARE_SHOTS = 10_000
+REAL_HARDWARE_SHOTS = 1_000
 
 # Accuracy-test circuits
 INCLUDE_ACCURACY_TEST_CIRCUITS = True
@@ -70,8 +70,8 @@ DO_TIME_ORDERING_HARDWARE = True
 
 # Backends to use
 REAL_BACKENDS = {
-    "ibm_torino": True,
-    "ibm_kingston": False,
+    "ibm_torino": False,
+    "ibm_kingston": True,
     "ibm_fez": False,
     "ibm_marrakesh": False,
 }

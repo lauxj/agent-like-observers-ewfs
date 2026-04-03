@@ -18,7 +18,6 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 DATA_DIR_FAKE = PROJECT_ROOT / "data" / "data_fake_hardware"
 DATA_DIR_FAKE.mkdir(parents=True, exist_ok=True)
 
-FAKE_NOISE_SEED = None
 BACKEND_NAME = "ibm_torino"
 
 
@@ -44,7 +43,7 @@ def simulate_with_backend_noise(tqc, backend, shots, sim=None):
     """Run one fake-hardware noisy simulation."""
     if sim is None:
         noise_model = NoiseModel.from_backend(backend)
-        sim = AerSimulator(noise_model=noise_model, seed_simulator=FAKE_NOISE_SEED)
+        sim = AerSimulator(noise_model=noise_model)
 
     counts = sim.run(tqc, shots=shots).result().get_counts()
     return counts_to_jsonable(counts)
@@ -82,7 +81,7 @@ def run_fake_hardware_for_backend(
     print(f"Shots: {shots}")
 
     noise_model = NoiseModel.from_backend(backend)
-    sim = AerSimulator(noise_model=noise_model, seed_simulator=FAKE_NOISE_SEED)
+    sim = AerSimulator(noise_model=noise_model)
 
     run_data = {
         "agents": {},
