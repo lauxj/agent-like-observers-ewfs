@@ -45,7 +45,7 @@ PLOT_DIR.mkdir(parents=True, exist_ok=True)
 
 BACKEND_NAME = "ibm_torino"
 # Toggle between searched layouts and the hard-coded manual layouts below.
-USE_AUTO_LAYOUT = True
+USE_AUTO_LAYOUT = False
 AUTO_LAYOUT_READOUT_WEIGHT = DEFAULT_READOUT_WEIGHT
 AUTO_LAYOUT_CZ_WEIGHT = DEFAULT_CZ_WEIGHT
 AUTO_LAYOUT_COHERENCE_WEIGHT = DEFAULT_COHERENCE_WEIGHT
@@ -68,15 +68,15 @@ MANUAL_LAYOUTS_BY_BACKEND = {
     },
     "ibm_fez": {
         # Fill these physical qubit indices manually before running on Fez.
-        6: [37, 45, 46, 47, 10, 142],  # Reflex Agent
-        7: [37, 45, 46, 44, 47, 10, 142],  # Guessing Agent
-        8: [37, 45, 46, 44, 47, 43, 10, 142],  # Betting Agent / Always 3/4 Agent
+        6: [10, 11, 12, 13, 5, 134],  # Reflex Agent
+        7: [10, 11, 12, 18, 13, 5, 134],  # Guessing Agent
+        8: [18, 11, 12, 10, 13, 9, 5, 134],  # Betting Agent / Always 3/4 Agent
     },
     "ibm_marrakesh": {
         # Fill these physical qubit indices manually before running on Marrakesh.
-        6: [37, 45, 46, 47, 10, 142],  # Reflex Agent
-        7: [37, 45, 46, 44, 47, 10, 142],  # Guessing Agent
-        8: [37, 45, 46, 44, 47, 43, 10, 142],  # Betting Agent / Always 3/4 Agent
+        6: [10, 11, 12, 13, 5, 134],  # Reflex Agent
+        7: [10, 11, 12, 18, 13, 5, 134],  # Guessing Agent
+        8: [18, 11, 12, 10, 13, 9, 5, 134],  # Betting Agent / Always 3/4 Agent
     },
 }
 
