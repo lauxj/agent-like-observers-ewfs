@@ -66,15 +66,16 @@ GUESSING_M2_INDEX_FROM_LEFT = 1
 GUESSING_G_INDEX_FROM_LEFT = 0
 
 # Reflex circuit count strings are read as c[5]...c[0].
-# L is measured into c[5] -> index 0 from the left.
+# R is measured into c[5] -> index 0 from the left.
 # M is measured into c[2] -> index 3 from the left.
-REFLEX_SC_INDEX_FROM_LEFT = 2
-REFLEX_L_INDEX_FROM_LEFT = 0
+REFLEX_SA_INDEX_FROM_LEFT = 2
+REFLEX_R_INDEX_FROM_LEFT = 0
 REFLEX_M_INDEX_FROM_LEFT = 3
 
 LF_AGENT_NAMES = ["Betting Agent", "Guessing Agent", "Reflex Agent", "Always 3/4 Agent"]
 STANDARD_AGENT_NAMES = LF_AGENT_NAMES
 MEMORY_PLOT_AGENT_NAMES = ["Reflex Agent", "Guessing Agent", "Betting Agent", "Always 3/4 Agent"]
+HARDWARE_LF_SUMMARY_AGENT_NAMES = ["Reflex Agent", "Guessing Agent", "Betting Agent"]
 LF_TERM_SPECS = [
     ("E11", -1.0, r"$-\langle A_1 B_1 \rangle$"),
     ("E12", 1.0, r"$\langle A_1 B_2 \rangle$"),
@@ -152,16 +153,16 @@ ACCURACY_METRIC_SPECS = {
         "filename": "reflex_agent_accuracy_comparison.png",
         "summary_title": "\nReflex agent accuracy:",
     },
-    "reflex_sc_m_accuracy": {
-        "value_key": "reflex_sc_m_accuracy",
-        "error_key": "reflex_sc_m_accuracy_stderr",
-        "shots_key": "reflex_sc_m_accuracy_shots",
-        "title": r"Reflex Agent: $S_c$ and $M$ Agreement",
-        "ylabel": r"$P(M=S_c)$",
+    "reflex_sa_m_accuracy": {
+        "value_key": "reflex_sa_m_accuracy",
+        "error_key": "reflex_sa_m_accuracy_stderr",
+        "shots_key": "reflex_sa_m_accuracy_shots",
+        "title": r"Reflex Agent: $S_a$ and $M$ Agreement",
+        "ylabel": r"$P(M=S_a)$",
         "ideal_value": 1.0,
         "ideal_label": r"Ideal agreement = 1.0",
-        "filename": "reflex_agent_sc_m_agreement_accuracy.png",
-        "summary_title": "\nReflex agent S_c/M agreement accuracy:",
+        "filename": "reflex_agent_sa_m_agreement_accuracy.png",
+        "summary_title": "\nReflex agent S_a/M agreement accuracy:",
     },
     "always_large_accuracy": {
         "value_key": "always_large_accuracy",
@@ -178,7 +179,6 @@ ACCURACY_METRIC_SPECS = {
 
 
 def style_bar_axes(ax, title: str, ylabel: str):
-    ax.set_title(title)
     ax.set_ylabel(ylabel)
     ax.grid(axis="y", alpha=0.25)
     ax.set_axisbelow(True)
@@ -257,6 +257,17 @@ def save_plot_metadata(plot_path: Path, metadata: dict) -> Path:
     metadata_path = sidecar_metadata_path(plot_path)
     save_json(metadata_path, metadata)
     return metadata_path
+
+
+def pdf_plot_path(plot_path: Path) -> Path:
+    return plot_path.with_suffix(".pdf")
+
+
+def save_plot(fig, plot_path: Path, *, dpi: int = 300, bbox_inches: str = "tight") -> Path:
+    plot_path.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(plot_path, dpi=dpi, bbox_inches=bbox_inches)
+    fig.savefig(pdf_plot_path(plot_path), dpi=dpi, bbox_inches=bbox_inches)
+    return plot_path
 
 
 def candidate_run_dirs(data_dir: Path, result_filename: str):
@@ -650,9 +661,9 @@ def build_born_rule_plot_metadata(results):
     metadata = common_plot_metadata(
         results,
         plot_type="born_rule_accuracy",
-        title="Born-Rule Agent Accuracy",
+        title="Betting Agent Accuracy",
     )
-    metadata["ideal_reference"] = {"label": "Ideal Born-rule agent", "value": 1.0}
+    metadata["ideal_reference"] = {"label": "Ideal Betting Agent", "value": 1.0}
     metadata["categories"] = [
         {
             "category": "P(bet 1/4 | c1=0)",
@@ -686,10 +697,10 @@ def build_payoff_comparison_metadata(results):
     metadata = common_plot_metadata(
         results,
         plot_type="payoff_comparison",
-        title="Born-Rule vs Always-3/4 Payoff",
+        title="Betting Agent vs Always-3/4 Payoff",
     )
     metadata["theory"] = {
-        "Born-rule agent": float(theory_payoff_for_policy("betting")),
+        "Betting Agent": float(theory_payoff_for_policy("betting")),
         "Always-3/4 agent": float(theory_payoff_for_policy("always_large")),
     }
     metadata["series"] = [
@@ -785,6 +796,51 @@ def build_hardware_lf_comparison_metadata(results, agent_name: str):
             },
         },
     ]
+    return metadata
+
+
+def build_hardware_lf_agent_summary_metadata(results, memory_inaccuracy_summary=None):
+    real_result = result_for_label(results, "Real hardware")
+    agent_rows = []
+
+    for agent_name in HARDWARE_LF_SUMMARY_AGENT_NAMES:
+        real_series = load_backend_lf_series(results, "Real hardware", agent_name)
+        epsilon = lookup_combined_memory_epsilon(memory_inaccuracy_summary, "Real hardware", agent_name)
+        s_summary = real_series["_s_summary"]
+        agent_rows.append(
+            {
+                "agent_name": agent_name,
+                "s_value": float(s_summary["value"]),
+                "s_error": float(s_summary["stderr"]),
+                "run_count": int(real_series["_run_count"]),
+                "four_epsilon": None if epsilon is None else float(4.0 * epsilon),
+                "correlators": {
+                    key: {
+                        "value": float(real_series[key]["value"]),
+                        "error": float(real_series[key]["stderr"]),
+                    }
+                    for key, _, _ in LF_TERM_SPECS
+                },
+            }
+        )
+
+    agent_rows.sort(key=lambda row: row["s_value"], reverse=True)
+    metadata = common_plot_metadata(
+        results,
+        plot_type="hardware_lf_agent_summary",
+        title=f"{result_display_label(real_result)} LF Violation Comparison Across Agents",
+        description=(
+            "Real-hardware LF violation comparison across all agents, shown as stacked signed "
+            "correlator contributions to S for direct ranking."
+        ),
+    )
+    metadata["backend_label"] = "Real hardware"
+    metadata["backend_display_label"] = result_display_label(real_result)
+    metadata["ideal_reference"] = {
+        "correlators": {key: float(LF_ANALYTIC_CORRELATORS[key]) for key, _, _ in LF_TERM_SPECS},
+        "s_value": float(2.0 * np.sqrt(2.0) - 2.0),
+    }
+    metadata["agents"] = agent_rows
     return metadata
 
 
@@ -941,19 +997,19 @@ def extract_reflex_accuracy(counts):
     return extract_binary_accuracy(
         counts,
         min_length=6,
-        first_index=REFLEX_L_INDEX_FROM_LEFT,
+        first_index=REFLEX_R_INDEX_FROM_LEFT,
         second_index=REFLEX_M_INDEX_FROM_LEFT,
-        bit_names="L and M bits",
+        bit_names="R and M bits",
     )
 
 
-def extract_reflex_sc_m_accuracy(counts):
+def extract_reflex_sa_m_accuracy(counts):
     return extract_binary_accuracy(
         counts,
         min_length=6,
         first_index=REFLEX_M_INDEX_FROM_LEFT,
-        second_index=REFLEX_SC_INDEX_FROM_LEFT,
-        bit_names="M and S_c bits",
+        second_index=REFLEX_SA_INDEX_FROM_LEFT,
+        bit_names="M and S_a bits",
     )
 
 
@@ -1142,7 +1198,7 @@ def extract_backend_run_result(label: str, run_dir: Path, result_filename: str):
     always_large_accuracy_stats = extract_always_large_accuracy(always_large_counts)
     guessing_stats = extract_guessing_accuracy(guessing_counts)
     reflex_stats = extract_reflex_accuracy(reflex_counts)
-    reflex_sc_m_stats = extract_reflex_sc_m_accuracy(reflex_counts)
+    reflex_sa_m_stats = extract_reflex_sa_m_accuracy(reflex_counts)
 
     return {
         "run_dir": run_dir.resolve(),
@@ -1164,9 +1220,9 @@ def extract_backend_run_result(label: str, run_dir: Path, result_filename: str):
         "reflex_accuracy": reflex_stats["accuracy"],
         "reflex_accuracy_stderr": reflex_stats["stderr"],
         "reflex_accuracy_shots": reflex_stats["total_shots"],
-        "reflex_sc_m_accuracy": reflex_sc_m_stats["accuracy"],
-        "reflex_sc_m_accuracy_stderr": reflex_sc_m_stats["stderr"],
-        "reflex_sc_m_accuracy_shots": reflex_sc_m_stats["total_shots"],
+        "reflex_sa_m_accuracy": reflex_sa_m_stats["accuracy"],
+        "reflex_sa_m_accuracy_stderr": reflex_sa_m_stats["stderr"],
+        "reflex_sa_m_accuracy_shots": reflex_sa_m_stats["total_shots"],
     }
 
 
@@ -1208,10 +1264,10 @@ def load_backend_result(
         "reflex_accuracy",
         "reflex_accuracy_stderr",
     )
-    reflex_sc_m_summary = summarize_scalar_measurement(
+    reflex_sa_m_summary = summarize_scalar_measurement(
         per_run_results,
-        "reflex_sc_m_accuracy",
-        "reflex_sc_m_accuracy_stderr",
+        "reflex_sa_m_accuracy",
+        "reflex_sa_m_accuracy_stderr",
     )
 
     return {
@@ -1255,11 +1311,11 @@ def load_backend_result(
         "reflex_accuracy_sigma": reflex_accuracy_summary["sigma"],
         "reflex_accuracy_sem": reflex_accuracy_summary["sem"],
         "reflex_accuracy_shots": sum(result["reflex_accuracy_shots"] for result in per_run_results),
-        "reflex_sc_m_accuracy": reflex_sc_m_summary["value"],
-        "reflex_sc_m_accuracy_stderr": reflex_sc_m_summary["stderr"],
-        "reflex_sc_m_accuracy_sigma": reflex_sc_m_summary["sigma"],
-        "reflex_sc_m_accuracy_sem": reflex_sc_m_summary["sem"],
-        "reflex_sc_m_accuracy_shots": sum(result["reflex_sc_m_accuracy_shots"] for result in per_run_results),
+        "reflex_sa_m_accuracy": reflex_sa_m_summary["value"],
+        "reflex_sa_m_accuracy_stderr": reflex_sa_m_summary["stderr"],
+        "reflex_sa_m_accuracy_sigma": reflex_sa_m_summary["sigma"],
+        "reflex_sa_m_accuracy_sem": reflex_sa_m_summary["sem"],
+        "reflex_sa_m_accuracy_shots": sum(result["reflex_sa_m_accuracy_shots"] for result in per_run_results),
     }
 
 
@@ -1585,7 +1641,7 @@ def plot_combined_memory_epsilon(memory_inaccuracy_summary, output_dir: Path) ->
     fig.tight_layout()
 
     plot_path = output_dir / "combined_memory_initialization_epsilon_comparison.png"
-    fig.savefig(plot_path, dpi=300, bbox_inches="tight")
+    save_plot(fig, plot_path, dpi=300, bbox_inches="tight")
     plt.close(fig)
     return plot_path
 
@@ -1636,22 +1692,17 @@ def plot_born_rule_accuracy(results, output_dir: Path) -> Path:
         color=THEORY_LINE_COLOR,
         linestyle="--",
         linewidth=1.8,
-        label="Ideal Born-rule agent",
+        label="Ideal Betting Agent",
     )
 
     ax.set_xticks(x)
     ax.set_xticklabels(categories)
     ax.set_ylim(0.0, y_max)
-    style_bar_axes(ax, "Born-Rule Agent Accuracy", "Accuracy")
-    ax.legend(
-        loc="upper right",
-        fontsize=10,
-        frameon=True,
-    )
-    fig.tight_layout()
+    style_bar_axes(ax, "Betting Agent Accuracy", "Accuracy")
+    place_legend_above_axes(fig, ax, ncol=2, fontsize=10)
 
-    plot_path = output_dir / "born_rule_agent_accuracy_comparison.png"
-    fig.savefig(plot_path, dpi=300, bbox_inches="tight")
+    plot_path = output_dir / "betting_agent_accuracy_comparison.png"
+    save_plot(fig, plot_path, dpi=300, bbox_inches="tight")
     plt.close(fig)
     return plot_path
 
@@ -1681,7 +1732,7 @@ def plot_always_large_vs_betting_payoff_comparison(results, output_dir: Path) ->
         color=THEORY_COMPARISON_COLORS["Born-rule"],
         edgecolor="black",
         linewidth=1.0,
-        label="Born-rule agent",
+        label="Betting Agent",
     )
     always_large_bars = ax.bar(
         x + width / 2,
@@ -1723,10 +1774,10 @@ def plot_always_large_vs_betting_payoff_comparison(results, output_dir: Path) ->
     ax.set_xticks(x)
     ax.set_xticklabels(backend_labels)
     ax.set_ylim(-0.33, 0.12)
-    style_bar_axes(ax, "Born-Rule vs Always-3/4 Payoff", "Expected payoff")
+    style_bar_axes(ax, "Betting Agent vs Always-3/4 Payoff", "Expected payoff")
     ax.legend(
         handles=[
-            Patch(facecolor=THEORY_COMPARISON_COLORS["Born-rule"], edgecolor="black", label="Born-rule agent"),
+            Patch(facecolor=THEORY_COMPARISON_COLORS["Born-rule"], edgecolor="black", label="Betting Agent"),
             Patch(facecolor=THEORY_COMPARISON_COLORS["Always 3/4"], edgecolor="black", label="Always-3/4 agent"),
             Line2D([0], [0], color="#C92A2A", linestyle="--", linewidth=1.8, label="Theoretical value"),
         ],
@@ -1738,7 +1789,7 @@ def plot_always_large_vs_betting_payoff_comparison(results, output_dir: Path) ->
     fig.tight_layout()
 
     plot_path = output_dir / "betting_agent_vs_always_3_4_payoff_comparison.png"
-    fig.savefig(plot_path, dpi=300, bbox_inches="tight")
+    save_plot(fig, plot_path, dpi=300, bbox_inches="tight")
     plt.close(fig)
     return plot_path
 
@@ -1820,7 +1871,6 @@ def plot_backend_lf_correlator_comparisons(results, output_dir: Path, backend_la
         ax1.set_ylabel("Correlator value")
         ax1.axhline(0, color="black", linewidth=0.8, zorder=1)
         ax1.grid(axis="y", alpha=0.25)
-        ax1.set_title(f"{agent_name}: {backend_title_prefix} LF Correlators")
         ax1.plot([], [], color="red", linestyle="--", linewidth=2, label="Ideal theoretical value")
         ax1.plot([], [], color="black", linewidth=1.5, marker="|", markersize=10, label="Standard error of the mean (SEM)")
         ax1.legend(loc="upper right", fontsize=10, frameon=True)
@@ -1963,7 +2013,7 @@ def plot_backend_lf_correlator_comparisons(results, output_dir: Path, backend_la
         fig.subplots_adjust(left=0.10, right=0.97, top=0.92, bottom=0.12, hspace=0.18)
 
         plot_path = output_dir / f"{backend_filename_prefix}_{agent_label_to_filename(agent_name)}_lf_correlator_comparison.png"
-        fig.savefig(plot_path, dpi=300, bbox_inches="tight")
+        save_plot(fig, plot_path, dpi=300, bbox_inches="tight")
         plt.close(fig)
         saved_paths.append(plot_path)
 
@@ -2086,7 +2136,6 @@ def plot_hardware_lf_comparison_per_agent(results, output_dir: Path, memory_inac
         ax1.set_ylabel("Correlator value")
         ax1.axhline(0, color="black", linewidth=0.8, zorder=1)
         ax1.grid(axis="y", alpha=0.25)
-        ax1.set_title(f"{agent_name}: {fake_label} vs {real_label} LF Correlators")
         hardware_handles = [
             Patch(facecolor="white", edgecolor="black", linewidth=1.0, label=real_label),
             Patch(facecolor="white", edgecolor="black", linewidth=1.4, linestyle="--", label=fake_label),
@@ -2263,11 +2312,162 @@ def plot_hardware_lf_comparison_per_agent(results, output_dir: Path, memory_inac
         fig.subplots_adjust(left=0.22, right=0.992, top=0.92, bottom=0.10, hspace=0.18)
 
         plot_path = output_dir / f"hardware_comparison_{agent_label_to_filename(agent_name)}_lf_correlator_comparison.png"
-        fig.savefig(plot_path, dpi=300, bbox_inches="tight")
+        save_plot(fig, plot_path, dpi=300, bbox_inches="tight")
         plt.close(fig)
         saved_paths.append(plot_path)
 
     return saved_paths
+
+
+def plot_hardware_lf_agent_summary(results, output_dir: Path, memory_inaccuracy_summary=None) -> Path:
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    classical_bound = 2.0
+    tsirelson_bound = 2.0 * np.sqrt(2.0)
+    violation_offset = -classical_bound
+    tsirelson_violation = tsirelson_bound - classical_bound
+    real_result = result_for_label(results, "Real hardware")
+    real_label = result_display_label(real_result)
+
+    agent_rows = []
+    for agent_name in HARDWARE_LF_SUMMARY_AGENT_NAMES:
+        real_series = load_backend_lf_series(results, "Real hardware", agent_name)
+        epsilon = lookup_combined_memory_epsilon(memory_inaccuracy_summary, "Real hardware", agent_name)
+        agent_rows.append(
+            {
+                "agent_name": agent_name,
+                "series": real_series,
+                "signed_values": np.array([sign * real_series[key]["value"] for key, sign, _ in LF_TERM_SPECS]),
+                "signed_errors": np.array([real_series[key]["stderr"] for key, _, _ in LF_TERM_SPECS]),
+                "four_epsilon": None if epsilon is None else 4.0 * epsilon,
+            }
+        )
+
+    agent_rows.sort(key=lambda row: row["series"]["_s_summary"]["value"], reverse=True)
+    signed_ideal_values = np.array([sign * LF_ANALYTIC_CORRELATORS[key] for key, sign, _ in LF_TERM_SPECS])
+
+    fig_height = 4.8 + 0.75 * len(agent_rows)
+    fig, ax = plt.subplots(figsize=(10.8, fig_height))
+
+    row_positions = np.arange(len(agent_rows))[::-1]
+    bar_height = 0.5
+    theory_height = bar_height + 0.1
+    max_right_limit = tsirelson_violation + 0.12
+
+    for y_pos, row in zip(row_positions, agent_rows):
+        left_exp = violation_offset
+        left_ideal = violation_offset
+        cumulative_centers = []
+        cumulative_variance = 0.0
+
+        for idx in range(len(LF_TERM_SPECS)):
+            width_exp = abs(row["signed_values"][idx])
+            width_ideal = abs(signed_ideal_values[idx])
+
+            ax.barh(
+                y_pos,
+                width_exp,
+                height=bar_height,
+                left=left_exp,
+                color=LF_TERM_COLORS[idx],
+                edgecolor="none",
+                zorder=2,
+            )
+
+            theory_left = left_ideal
+            theory_right = left_ideal + width_ideal
+            theory_ymin = y_pos - theory_height / 2.0
+            theory_ymax = y_pos + theory_height / 2.0
+            ax.hlines(
+                [theory_ymin, theory_ymax],
+                theory_left,
+                theory_right,
+                colors="red",
+                linestyles="--",
+                linewidth=1.5,
+                zorder=3,
+            )
+            ax.vlines(
+                [theory_left, theory_right],
+                theory_ymin,
+                theory_ymax,
+                colors="red",
+                linestyles="--",
+                linewidth=1.5,
+                zorder=3,
+            )
+
+            left_exp += width_exp
+            left_ideal += width_ideal
+            cumulative_variance += row["signed_errors"][idx] ** 2
+            cumulative_centers.append(left_exp)
+
+        s_summary = row["series"]["_s_summary"]
+        final_sigma = s_summary["stderr"]
+        final_violation = s_summary["value"]
+        run_count = row["series"]["_run_count"]
+        if run_count > 1:
+            ax.errorbar(
+                [cumulative_centers[-1]],
+                [y_pos],
+                xerr=[final_sigma / 2.0],
+                fmt="none",
+                ecolor="black",
+                elinewidth=1.5,
+                capsize=4,
+                capthick=1.5,
+                zorder=4,
+            )
+
+        final_text_x = cumulative_centers[-1] + final_sigma / 2.0 + 0.08
+        ax.text(
+            final_text_x,
+            y_pos,
+            f"S = {final_violation:.3f}\n± {final_sigma:.3f}",
+            ha="left",
+            va="center",
+            fontsize=9,
+            zorder=7,
+            bbox={"facecolor": "white", "edgecolor": "none", "alpha": 0.9, "pad": 1.4},
+        )
+        max_right_limit = max(max_right_limit, final_text_x + 0.42)
+
+    for threshold in [0.0, tsirelson_violation]:
+        ax.axvline(
+            x=threshold,
+            color="red",
+            linewidth=2.2,
+            zorder=5,
+        )
+
+    ax.set_xlim(violation_offset, max_right_limit)
+    ax.set_ylim(-0.7, len(agent_rows) - 0.3)
+    ax.set_yticks(row_positions)
+    ax.set_yticklabels([row["agent_name"] for row in agent_rows], fontsize=11)
+    ax.grid(axis="x", linestyle="--", alpha=0.25)
+    for spine in ["top", "right"]:
+        ax.spines[spine].set_visible(False)
+    ax.spines["left"].set_visible(False)
+    ax.set_xticks([violation_offset, 0.0, tsirelson_violation])
+    ax.set_xticklabels(["-2", "0", r"$2\sqrt{2}-2$"], fontsize=12)
+    ax.spines["bottom"].set_linewidth(1.5)
+
+    legend_handles = [
+        Patch(facecolor=color, edgecolor="none", label=label)
+        for color, (_, _, label) in zip(LF_TERM_COLORS, LF_TERM_SPECS)
+    ]
+    legend_handles.extend(
+        [
+            Line2D([], [], color="red", linestyle="--", linewidth=2, label="Ideal theoretical value"),
+            Line2D([], [], color="black", linewidth=1.5, marker="|", markersize=10, label="Standard error of the mean"),
+        ]
+    )
+    place_legend_above_axes(fig, ax, ncol=3, fontsize=10, handles=legend_handles)
+
+    plot_path = output_dir / "hardware_agent_lf_violation_summary.png"
+    save_plot(fig, plot_path, dpi=300, bbox_inches="tight")
+    plt.close(fig)
+    return plot_path
 
 
 def plot_accuracy_comparison(
@@ -2330,7 +2530,7 @@ def plot_accuracy_comparison(
     fig.tight_layout()
 
     plot_path = output_dir / filename
-    fig.savefig(plot_path, dpi=300, bbox_inches="tight")
+    save_plot(fig, plot_path, dpi=300, bbox_inches="tight")
     plt.close(fig)
     return plot_path
 
@@ -2380,8 +2580,8 @@ def plot_always_large_accuracy(results, output_dir: Path) -> Path:
     return plot_accuracy_metric(results, output_dir, "always_large_accuracy")
 
 
-def plot_reflex_sc_m_accuracy(results, output_dir: Path) -> Path:
-    return plot_accuracy_metric(results, output_dir, "reflex_sc_m_accuracy")
+def plot_reflex_sa_m_accuracy(results, output_dir: Path) -> Path:
+    return plot_accuracy_metric(results, output_dir, "reflex_sa_m_accuracy")
 
 
 def print_accuracy_metric_summary(results, metric_key: str):
@@ -2403,13 +2603,13 @@ def print_payoff_summary(results):
     for result in results:
         print(
             f"  {result_display_label(result)}: "
-            f"Born-rule={result['observed_payoff']:.4f}, "
+            f"Betting Agent={result['observed_payoff']:.4f}, "
             f"Always-3/4={result['always_large_observed_payoff']:.4f}"
         )
     print(f"  Random agent (theory): {theory_payoff_for_policy('random'):.4f}")
     print(f"  Opposite agent (theory): {theory_payoff_for_policy('opposite'):.4f}")
     print(f"  Always-1/4 agent (theory): {theory_payoff_for_policy('always_small'):.4f}")
-    print(f"  Born-rule agent (theory): {theory_payoff_for_policy('betting'):.4f}")
+    print(f"  Betting Agent (theory): {theory_payoff_for_policy('betting'):.4f}")
     print(f"  Always-3/4 agent (theory): {theory_payoff_for_policy('always_large'):.4f}")
 
 
@@ -2421,8 +2621,8 @@ def print_reflex_summary(results):
     print_accuracy_metric_summary(results, "reflex_accuracy")
 
 
-def print_reflex_sc_m_summary(results):
-    print_accuracy_metric_summary(results, "reflex_sc_m_accuracy")
+def print_reflex_sa_m_summary(results):
+    print_accuracy_metric_summary(results, "reflex_sa_m_accuracy")
 
 
 def print_always_large_summary(results):
@@ -2442,7 +2642,7 @@ def print_selection_summary(results):
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Create the Betting Agent Born-rule strategy comparison plot."
+        description="Create the Betting Agent strategy comparison plot."
     )
     parser.add_argument("--noiseless-run", type=str, default=None, help="Run folder name inside data/data_noiseless_simulation.")
     parser.add_argument("--fake-run", type=str, default=None, help="Run folder name inside data/data_fake_hardware.")
@@ -2543,9 +2743,18 @@ def main():
     )
     for plot_path, agent_name in zip(hardware_comparison_lf_plot_paths, LF_AGENT_NAMES):
         save_plot_metadata(plot_path, build_hardware_lf_comparison_metadata(results, agent_name))
+    hardware_agent_summary_plot_path = plot_hardware_lf_agent_summary(
+        results,
+        correlators_comparison_dir,
+        memory_inaccuracy_summary,
+    )
+    save_plot_metadata(
+        hardware_agent_summary_plot_path,
+        build_hardware_lf_agent_summary_metadata(results, memory_inaccuracy_summary),
+    )
     guessing_plot_path = save_accuracy_metric_plot(results, accuracy_dir, "guessing_accuracy")
     reflex_plot_path = save_accuracy_metric_plot(results, accuracy_dir, "reflex_accuracy")
-    reflex_sc_m_plot_path = save_accuracy_metric_plot(results, reflex_agreement_dir, "reflex_sc_m_accuracy")
+    reflex_sa_m_plot_path = save_accuracy_metric_plot(results, reflex_agreement_dir, "reflex_sa_m_accuracy")
     always_large_accuracy_plot_path = save_accuracy_metric_plot(results, accuracy_dir, "always_large_accuracy")
     combined_memory_epsilon_plot_path = plot_combined_memory_epsilon(
         memory_inaccuracy_summary,
@@ -2559,20 +2768,21 @@ def main():
     print_payoff_summary(results)
     print_guessing_summary(results)
     print_reflex_summary(results)
-    print_reflex_sc_m_summary(results)
+    print_reflex_sa_m_summary(results)
     print_always_large_summary(results)
-    print(f"Saved Born-rule accuracy plot to: {born_rule_accuracy_plot_path}")
-    print(f"Saved betting-vs-always-3/4 payoff comparison plot to: {always_large_vs_betting_plot_path}")
+    print(f"Saved Betting Agent accuracy plot to: {born_rule_accuracy_plot_path} (PDF: {pdf_plot_path(born_rule_accuracy_plot_path)})")
+    print(f"Saved betting-vs-always-3/4 payoff comparison plot to: {always_large_vs_betting_plot_path} (PDF: {pdf_plot_path(always_large_vs_betting_plot_path)})")
     for plot_path in lf_correlator_plot_paths:
-        print(f"Saved backend LF correlator plot to: {plot_path}")
+        print(f"Saved backend LF correlator plot to: {plot_path} (PDF: {pdf_plot_path(plot_path)})")
     for plot_path in hardware_comparison_lf_plot_paths:
-        print(f"Saved combined hardware LF correlator plot to: {plot_path}")
-    print(f"Saved guessing accuracy plot to: {guessing_plot_path}")
-    print(f"Saved reflex accuracy plot to: {reflex_plot_path}")
-    print(f"Saved reflex S_c/M agreement accuracy plot to: {reflex_sc_m_plot_path}")
-    print(f"Saved always-3/4 accuracy plot to: {always_large_accuracy_plot_path}")
+        print(f"Saved combined hardware LF correlator plot to: {plot_path} (PDF: {pdf_plot_path(plot_path)})")
+    print(f"Saved hardware LF agent summary plot to: {hardware_agent_summary_plot_path} (PDF: {pdf_plot_path(hardware_agent_summary_plot_path)})")
+    print(f"Saved guessing accuracy plot to: {guessing_plot_path} (PDF: {pdf_plot_path(guessing_plot_path)})")
+    print(f"Saved reflex accuracy plot to: {reflex_plot_path} (PDF: {pdf_plot_path(reflex_plot_path)})")
+    print(f"Saved reflex S_a/M agreement accuracy plot to: {reflex_sa_m_plot_path} (PDF: {pdf_plot_path(reflex_sa_m_plot_path)})")
+    print(f"Saved always-3/4 accuracy plot to: {always_large_accuracy_plot_path} (PDF: {pdf_plot_path(always_large_accuracy_plot_path)})")
     print(f"Saved memory inaccuracy summary to: {memory_inaccuracy_folder_path}")
-    print(f"Saved combined memory epsilon plot to: {combined_memory_epsilon_plot_path}")
+    print(f"Saved combined memory epsilon plot to: {combined_memory_epsilon_plot_path} (PDF: {pdf_plot_path(combined_memory_epsilon_plot_path)})")
     for result in memory_inaccuracy_results:
         if not result.get("available", True):
             print(f"Memory inaccuracy unavailable for {result['display_label']}: {result['error']}")

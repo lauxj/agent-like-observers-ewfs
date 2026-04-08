@@ -74,9 +74,9 @@ MANUAL_LAYOUTS_BY_BACKEND = {
     },
     "ibm_marrakesh": {
         # Fill these physical qubit indices manually before running on Marrakesh.
-        6: [10, 11, 12, 13, 5, 134],  # Reflex Agent
-        7: [10, 11, 12, 18, 13, 5, 134],  # Guessing Agent
-        8: [18, 11, 12, 10, 13, 9, 5, 134],  # Betting Agent / Always 3/4 Agent
+        6: [10, 11, 12, 13, 0, 155],  # Reflex Agent
+        7: [10, 11, 12, 18, 13, 0, 155],  # Guessing Agent
+        8: [18, 11, 12, 10, 13, 9, 0, 155],  # Betting Agent / Always 3/4 Agent
     },
 }
 
