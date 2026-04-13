@@ -38,6 +38,7 @@ EVALUATION_RUN_PATHS = {
 
 IDEAL_COLOR = "#222222"
 THEORY_LINE_COLOR = "#C92A2A"
+ACCURACY_THEORY_LINE_COLOR = "#FF0000"
 PAYOFF_BY_WALLET_STATE = {
     "00": -3 / 4,
     "01": -1 / 4,
@@ -74,7 +75,7 @@ REFLEX_M_INDEX_FROM_LEFT = 3
 
 LF_AGENT_NAMES = ["Betting Agent", "Guessing Agent", "Reflex Agent", "Always 3/4 Agent"]
 STANDARD_AGENT_NAMES = LF_AGENT_NAMES
-MEMORY_PLOT_AGENT_NAMES = ["Reflex Agent", "Guessing Agent", "Betting Agent", "Always 3/4 Agent"]
+MEMORY_PLOT_AGENT_NAMES = ["Reflex Agent", "Guessing Agent", "Betting Agent"]
 HARDWARE_LF_SUMMARY_AGENT_NAMES = ["Reflex Agent", "Guessing Agent", "Betting Agent"]
 LF_TERM_SPECS = [
     ("E11", -1.0, r"$-\langle A_1 B_1 \rangle$"),
@@ -99,6 +100,16 @@ BACKEND_COLORS = {
     "Noiseless": "#1F77B4",
     "Fake hardware": "#FF7F0E",
     "Real hardware": "#2CA02C",
+}
+MEMORY_BACKEND_COLORS = {
+    "Noiseless": "#14855F",
+    "Fake hardware": "#2B83BA",
+    "Real hardware": "#8E37AD",
+}
+ACCURACY_BACKEND_COLORS = {
+    "Noiseless": "#14855F",
+    "Fake hardware": "#2B83BA",
+    "Real hardware": "#8E37AD",
 }
 BACKEND_LABELS = ["Noiseless", "Fake hardware", "Real hardware"]
 BACKEND_DISPLAY_LABELS = {
@@ -130,6 +141,10 @@ PAYOFF_COLORS = [
     THEORY_COMPARISON_COLORS["Always 1/4"],
     THEORY_COMPARISON_COLORS["Always 3/4"],
 ]
+# Toggle these to restore the cleaner LF figures without the 4 epsilon guides.
+SHOW_FOUR_EPSILON_IN_BACKEND_LF_PLOTS = False
+SHOW_FOUR_EPSILON_IN_HARDWARE_LF_COMPARISON_PLOTS = False
+SHOW_FOUR_EPSILON_IN_HARDWARE_LF_SUMMARY_PLOT = False
 ACCURACY_METRIC_SPECS = {
     "guessing_accuracy": {
         "value_key": "guessing_accuracy",
@@ -139,6 +154,8 @@ ACCURACY_METRIC_SPECS = {
         "ylabel": "Guess accuracy",
         "ideal_value": 0.75,
         "ideal_label": "Ideal accuracy = 0.75",
+        "show_legend": True,
+        "y_max": 0.85,
         "filename": "guessing_agent_accuracy_comparison.png",
         "summary_title": "\nGuessing agent accuracy:",
     },
@@ -150,6 +167,8 @@ ACCURACY_METRIC_SPECS = {
         "ylabel": "Reflex accuracy",
         "ideal_value": 1.0,
         "ideal_label": "Ideal accuracy = 1.0",
+        "show_legend": True,
+        "y_max": 1.15,
         "filename": "reflex_agent_accuracy_comparison.png",
         "summary_title": "\nReflex agent accuracy:",
     },
@@ -161,6 +180,8 @@ ACCURACY_METRIC_SPECS = {
         "ylabel": r"$P(M=S_a)$",
         "ideal_value": 1.0,
         "ideal_label": r"Ideal agreement = 1.0",
+        "show_legend": True,
+        "y_max": 1.15,
         "filename": "reflex_agent_sa_m_agreement_accuracy.png",
         "summary_title": "\nReflex agent S_a/M agreement accuracy:",
     },
@@ -172,6 +193,8 @@ ACCURACY_METRIC_SPECS = {
         "ylabel": "Always-3/4 accuracy",
         "ideal_value": 1.0,
         "ideal_label": "Ideal accuracy = 1.0",
+        "show_legend": True,
+        "y_max": 1.15,
         "filename": "always_3_4_agent_accuracy_comparison.png",
         "summary_title": "\nAlways-3/4 agent accuracy:",
     },
@@ -182,6 +205,33 @@ def style_bar_axes(ax, title: str, ylabel: str):
     ax.set_ylabel(ylabel)
     ax.grid(axis="y", alpha=0.25)
     ax.set_axisbelow(True)
+
+
+def style_accuracy_axes(ax, ylabel: str):
+    ax.set_ylabel(ylabel)
+    ax.grid(axis="y", linestyle="--", alpha=0.28)
+    ax.set_axisbelow(True)
+    for spine in ["top", "right", "bottom", "left"]:
+        ax.spines[spine].set_visible(True)
+        ax.spines[spine].set_linewidth(1.0)
+
+
+def style_memory_axes(ax, ylabel: str):
+    ax.set_ylabel(ylabel)
+    ax.grid(axis="y", linestyle="--", alpha=0.28)
+    ax.set_axisbelow(True)
+    for spine in ["top", "right", "bottom", "left"]:
+        ax.spines[spine].set_visible(True)
+        ax.spines[spine].set_linewidth(1.0)
+
+
+def set_probability_axis_ticks(ax, y_max: float):
+    if y_max <= 1.001:
+        ticks = np.linspace(0.0, y_max, 6)
+    else:
+        ticks = np.linspace(0.0, 1.0, 6)
+    ax.set_yticks(ticks)
+    ax.set_yticklabels([f"{tick:.1f}" for tick in ticks])
 
 
 def place_legend_above_axes(fig, ax, *, ncol: int = 1, fontsize: int = 10, handles=None):
@@ -854,6 +904,27 @@ def draw_zero_marker(ax, bar, color, height: float = 0.008):
     )
 
 
+def draw_accuracy_target_blocks(
+    ax,
+    centers,
+    target_values,
+    *,
+    width: float,
+    color: str = ACCURACY_THEORY_LINE_COLOR,
+    linewidth: float = 2.0,
+):
+    return ax.bar(
+        centers,
+        target_values,
+        width=width,
+        fill=False,
+        edgecolor=color,
+        linestyle="--",
+        linewidth=linewidth,
+        zorder=3,
+    )
+
+
 def annotate_vertical_bars(
     ax,
     bars,
@@ -886,8 +957,27 @@ def annotate_vertical_bars(
             va = "top"
 
         if upper_cap is not None:
-            text_y = min(text_y, upper_cap)
+            if text_y > upper_cap:
+                text_y = upper_cap
+                if value >= 0:
+                    va = "top"
 
+        label = f"{value:.3f}" if np.isclose(error, 0.0) else f"{value:.3f}\n± {error:.3f}"
+        ax.text(
+            bar.get_x() + bar.get_width() / 2,
+            text_y,
+            label,
+            ha="center",
+            va=va,
+            fontsize=9,
+        )
+
+
+def annotate_custom_bar_labels(ax, bars, values, errors, y_positions, *, vas=None):
+    if vas is None:
+        vas = ["bottom" if value >= 0 else "top" for value in values]
+
+    for bar, value, error, text_y, va in zip(bars, values, errors, y_positions, vas):
         label = f"{value:.3f}" if np.isclose(error, 0.0) else f"{value:.3f}\n± {error:.3f}"
         ax.text(
             bar.get_x() + bar.get_width() / 2,
@@ -1588,12 +1678,94 @@ def lookup_combined_memory_epsilon(memory_inaccuracy_summary, backend_label: str
     return float(epsilon)
 
 
-def plot_combined_memory_epsilon(memory_inaccuracy_summary, output_dir: Path) -> Path:
+def build_tracking_epsilon_max_summary(results, backend_label: str = "Real hardware") -> dict:
+    backend_result = result_for_label(results, backend_label)
+    agents = {}
+
+    for agent_name in MEMORY_PLOT_AGENT_NAMES:
+        series = load_backend_lf_series(results, backend_label, agent_name)
+        s_summary = series["_s_summary"]
+        s_obs = float(s_summary["value"])
+        sigma_l = float(s_summary["stderr"])
+        epsilon_max = (s_obs - 3.0 * sigma_l) / 4.0
+
+        agents[agent_name] = {
+            "s_obs": s_obs,
+            "sigma_l": sigma_l,
+            "epsilon_max": float(epsilon_max),
+            "run_count": int(series["_run_count"]),
+        }
+
+    return {
+        "created_at": datetime.now().isoformat(timespec="seconds"),
+        "description": (
+            "Maximum allowed tracking error epsilon inferred from the aggregated LF "
+            "violation summaries. Values are computed from the selected runs using "
+            "epsilon_max = (S_obs - 3*sigma_L)/4."
+        ),
+        "backend_label": backend_label,
+        "backend_display_label": result_display_label(backend_result),
+        "selection_mode": backend_result["selection_mode"],
+        "run_count": int(backend_result["run_count"]),
+        "run_names": list(backend_result["run_names"]),
+        "criterion": "S_obs - 3*sigma_L > 4*epsilon",
+        "agents": agents,
+    }
+
+
+def build_payoff_value_summary(results) -> dict:
+    theory_values = {
+        "betting_agent": float(theory_payoff_for_policy("betting")),
+        "always_3_4_agent": float(theory_payoff_for_policy("always_large")),
+    }
+    backends = []
+
+    for result in results:
+        betting_observed = float(result["observed_payoff"])
+        always_large_observed = float(result["always_large_observed_payoff"])
+        backends.append(
+            {
+                "label": result["label"],
+                "display_label": result_display_label(result),
+                "axis_label": result_axis_label(result),
+                "backend_name": result.get("backend_name"),
+                "selection_mode": result.get("selection_mode"),
+                "run_count": int(result.get("run_count", 0)),
+                "run_names": list(result.get("run_names", [])),
+                "raw_shots_total": int(result.get("raw_shots_total", 0)),
+                "betting_agent": {
+                    "observed": betting_observed,
+                    "stderr": float(result["observed_payoff_stderr"]),
+                    "theory": theory_values["betting_agent"],
+                    "observed_minus_theory": betting_observed - theory_values["betting_agent"],
+                },
+                "always_3_4_agent": {
+                    "observed": always_large_observed,
+                    "stderr": float(result["always_large_observed_payoff_stderr"]),
+                    "theory": theory_values["always_3_4_agent"],
+                    "observed_minus_theory": always_large_observed - theory_values["always_3_4_agent"],
+                },
+            }
+        )
+
+    return {
+        "created_at": datetime.now().isoformat(timespec="seconds"),
+        "description": (
+            "Observed payoff values and theoretical references used in the payoff "
+            "comparison plot. Full floating-point values are saved here so tiny "
+            "deviations that are visually hidden in the figure remain accessible."
+        ),
+        "backends": backends,
+    }
+
+
+def plot_combined_memory_epsilon(memory_inaccuracy_summary, output_dir: Path, tracking_epsilon_max_summary: Optional[dict] = None) -> Path:
     output_dir.mkdir(parents=True, exist_ok=True)
 
     agent_names = MEMORY_PLOT_AGENT_NAMES
     x = np.arange(len(agent_names))
     width = 0.22
+    tracking_box_width = 0.78
 
     fig, ax = plt.subplots(figsize=(11.2, 6.2))
     max_height = 0.0
@@ -1614,7 +1786,7 @@ def plot_combined_memory_epsilon(memory_inaccuracy_summary, output_dir: Path) ->
             yerr=errors,
             capsize=5,
             ecolor="#333333",
-            color=BACKEND_COLORS[backend_label],
+            color=MEMORY_BACKEND_COLORS[backend_label],
             edgecolor="black",
             linewidth=1.0,
             label=backend_result["axis_label"],
@@ -1632,13 +1804,47 @@ def plot_combined_memory_epsilon(memory_inaccuracy_summary, output_dir: Path) ->
             zero_marker_height=0.0002,
         )
 
+    if tracking_epsilon_max_summary is not None:
+        for center, agent_name in zip(x, agent_names):
+            agent_summary = tracking_epsilon_max_summary.get("agents", {}).get(agent_name)
+            if agent_summary is None:
+                continue
+            epsilon_max = agent_summary.get("epsilon_max")
+            if epsilon_max is None or not np.isfinite(epsilon_max) or epsilon_max <= 0.0:
+                continue
+            draw_accuracy_target_blocks(
+                ax,
+                [center],
+                [float(epsilon_max)],
+                width=tracking_box_width,
+                color=ACCURACY_THEORY_LINE_COLOR,
+                linewidth=1.8,
+            )
+            max_height = max(max_height, float(epsilon_max))
+
     ax.set_xticks(x)
     ax.set_xticklabels(agent_names, rotation=0, ha="center")
     label_offset = max(0.0015, 0.08 * max_height)
     ax.set_ylim(0.0, max(0.02, max_height + 3.5 * label_offset))
-    style_bar_axes(ax, r"$P(c \neq a \mid x=1)$ estimate", r"$P(c \neq a \mid x=1)$")
-    ax.legend(loc="upper right", fontsize=10, frameon=True)
-    fig.tight_layout()
+    style_memory_axes(ax, r"$P(c \neq a \mid x=1)$")
+    legend_handles = [
+        Patch(
+            facecolor=MEMORY_BACKEND_COLORS[backend_label],
+            edgecolor="black",
+            linewidth=1.0,
+            label=next(
+                backend["axis_label"]
+                for backend in memory_inaccuracy_summary["backends"]
+                if backend["label"] == backend_label
+            ),
+        )
+        for backend_label in BACKEND_LABELS
+    ]
+    if tracking_epsilon_max_summary is not None:
+        legend_handles.append(
+            Line2D([], [], color=ACCURACY_THEORY_LINE_COLOR, linestyle="--", linewidth=1.8, label=r"Maximum allowed $\epsilon$")
+        )
+    place_legend_above_axes(fig, ax, ncol=4 if tracking_epsilon_max_summary is not None else 3, fontsize=10, handles=legend_handles)
 
     plot_path = output_dir / "combined_memory_initialization_epsilon_comparison.png"
     save_plot(fig, plot_path, dpi=300, bbox_inches="tight")
@@ -1651,10 +1857,18 @@ def plot_born_rule_accuracy(results, output_dir: Path) -> Path:
 
     categories = [r"$P(\mathrm{bet}\;1/4\mid c_1=0)$", r"$P(\mathrm{bet}\;3/4\mid c_1=1)$"]
     x = np.arange(len(categories))
-    width = 0.22
-    y_max = 1.20
+    width = 0.18
+    group_spacing = 0.26
+    target_width = (len(results) - 1) * group_spacing + width + 0.12
+    y_max = 1.15
 
     fig, ax = plt.subplots(figsize=(9.2, 5.6))
+    draw_accuracy_target_blocks(
+        ax,
+        x,
+        [1.0] * len(categories),
+        width=target_width,
+    )
     for idx, result in enumerate(results):
         values = [
             result["strategy_probabilities"]["P(bet 1/4 | c1=0)"],
@@ -1664,42 +1878,49 @@ def plot_born_rule_accuracy(results, output_dir: Path) -> Path:
             result["strategy_probabilities"]["P(bet 1/4 | c1=0) stderr"],
             result["strategy_probabilities"]["P(bet 3/4 | c1=1) stderr"],
         ]
-        offset = (idx - (len(results) - 1) / 2) * width
+        offset = (idx - (len(results) - 1) / 2) * group_spacing
+        centers = x + offset
         bars = ax.bar(
-            x + offset,
+            centers,
             values,
             yerr=errors,
             capsize=5,
             ecolor="#333333",
             width=width,
             label=result_display_label(result),
-            color=BACKEND_COLORS[result["label"]],
+            color=ACCURACY_BACKEND_COLORS[result["label"]],
             edgecolor="black",
             linewidth=1.0,
+            zorder=2,
         )
         annotate_vertical_bars(
             ax,
             bars,
             values,
             errors=errors,
-            upper_cap=y_max - 0.13,
-            positive_offset=0.03,
+            upper_cap=y_max - 0.02,
+            positive_offset=0.02,
             reference_values=[1.0] * len(values),
         )
-
-    ax.axhline(
-        1.0,
-        color=THEORY_LINE_COLOR,
-        linestyle="--",
-        linewidth=1.8,
-        label="Ideal Betting Agent",
-    )
 
     ax.set_xticks(x)
     ax.set_xticklabels(categories)
     ax.set_ylim(0.0, y_max)
-    style_bar_axes(ax, "Betting Agent Accuracy", "Accuracy")
-    place_legend_above_axes(fig, ax, ncol=2, fontsize=10)
+    style_accuracy_axes(ax, "Accuracy")
+    set_probability_axis_ticks(ax, y_max)
+    legend_handles = [
+        Patch(
+            facecolor=ACCURACY_BACKEND_COLORS[result["label"]],
+            edgecolor="black",
+            linewidth=1.0,
+            label=result_display_label(result),
+        )
+        for result in results
+    ]
+    legend_handles.append(
+        Line2D([], [], color=ACCURACY_THEORY_LINE_COLOR, linestyle="--", linewidth=2.0, label="Ideal target")
+    )
+    place_legend_above_axes(fig, ax, ncol=2, fontsize=10, handles=legend_handles)
 
     plot_path = output_dir / "betting_agent_accuracy_comparison.png"
     save_plot(fig, plot_path, dpi=300, bbox_inches="tight")
@@ -1746,8 +1967,34 @@ def plot_always_large_vs_betting_payoff_comparison(results, output_dir: Path) ->
         linewidth=1.0,
         label="Always-3/4 agent",
     )
-    annotate_vertical_bars(ax, born_rule_bars, born_rule_values, errors=born_rule_errors)
-    annotate_vertical_bars(ax, always_large_bars, always_large_values, errors=always_large_errors)
+    annotate_vertical_bars(
+        ax,
+        born_rule_bars,
+        born_rule_values,
+        errors=born_rule_errors,
+        positive_offset=0.015,
+        negative_offset=0.015,
+    )
+    always_large_text_y = []
+    always_large_text_va = []
+    for value, error in zip(always_large_values, always_large_errors):
+        if value >= 0:
+            always_large_text_y.append(value + error + 0.015)
+            always_large_text_va.append("bottom")
+        else:
+            always_large_text_y.append(value - error - 0.015)
+            always_large_text_va.append("top")
+    if len(always_large_text_y) >= 3:
+        # Keep the real-hardware label clear of the red theoretical target box.
+        always_large_text_y[2] = always_large_text_y[1]
+    annotate_custom_bar_labels(
+        ax,
+        always_large_bars,
+        always_large_values,
+        always_large_errors,
+        always_large_text_y,
+        vas=always_large_text_va,
+    )
 
     for bar in born_rule_bars:
         ax.hlines(
@@ -1775,18 +2022,17 @@ def plot_always_large_vs_betting_payoff_comparison(results, output_dir: Path) ->
     ax.set_xticklabels(backend_labels)
     ax.set_ylim(-0.33, 0.12)
     style_bar_axes(ax, "Betting Agent vs Always-3/4 Payoff", "Expected payoff")
-    ax.legend(
+    place_legend_above_axes(
+        fig,
+        ax,
+        ncol=3,
+        fontsize=9,
         handles=[
             Patch(facecolor=THEORY_COMPARISON_COLORS["Born-rule"], edgecolor="black", label="Betting Agent"),
             Patch(facecolor=THEORY_COMPARISON_COLORS["Always 3/4"], edgecolor="black", label="Always-3/4 agent"),
             Line2D([0], [0], color="#C92A2A", linestyle="--", linewidth=1.8, label="Theoretical value"),
         ],
-        loc="upper right",
-        fontsize=9,
-        frameon=True,
-        ncol=1,
     )
-    fig.tight_layout()
 
     plot_path = output_dir / "betting_agent_vs_always_3_4_payoff_comparison.png"
     save_plot(fig, plot_path, dpi=300, bbox_inches="tight")
@@ -1938,7 +2184,7 @@ def plot_backend_lf_correlator_comparisons(results, output_dir: Path, backend_la
                 ymax=threshold_ymax,
                 zorder=5,
             )
-        if four_epsilon is not None:
+        if SHOW_FOUR_EPSILON_IN_BACKEND_LF_PLOTS and four_epsilon is not None:
             line_top_y = -1.0 + threshold_ymax * (1.0 - (-1.0))
             ax2.axvline(
                 x=four_epsilon,
@@ -1998,7 +2244,7 @@ def plot_backend_lf_correlator_comparisons(results, output_dir: Path, backend_la
         )
 
         right_limit = max(tsirelson_violation + 0.12, final_text_x + 0.42)
-        if four_epsilon is not None:
+        if SHOW_FOUR_EPSILON_IN_BACKEND_LF_PLOTS and four_epsilon is not None:
             right_limit = max(right_limit, four_epsilon + 0.12)
         ax2.set_xlim(violation_offset, right_limit)
         ax2.set_ylim(-1, 1)
@@ -2251,7 +2497,7 @@ def plot_hardware_lf_comparison_per_agent(results, output_dir: Path, memory_inac
                 ymax=threshold_ymax,
                 zorder=5,
             )
-        if real_epsilon is not None:
+        if SHOW_FOUR_EPSILON_IN_HARDWARE_LF_COMPARISON_PLOTS and real_epsilon is not None:
             four_epsilon = 4.0 * real_epsilon
             line_top_y = -0.55 + threshold_ymax * (0.55 - (-0.55))
             ax2.axvline(
@@ -2432,6 +2678,31 @@ def plot_hardware_lf_agent_summary(results, output_dir: Path, memory_inaccuracy_
         )
         max_right_limit = max(max_right_limit, final_text_x + 0.42)
 
+        four_epsilon = row["four_epsilon"]
+        if SHOW_FOUR_EPSILON_IN_HARDWARE_LF_SUMMARY_PLOT and four_epsilon is not None and np.isfinite(four_epsilon):
+            threshold_ymin = y_pos - (theory_height / 2.0 + 0.05)
+            threshold_ymax = y_pos + (theory_height / 2.0 + 0.05)
+            ax.vlines(
+                four_epsilon,
+                threshold_ymin,
+                threshold_ymax,
+                colors="black",
+                linestyles="--",
+                linewidth=1.8,
+                zorder=6,
+            )
+            ax.text(
+                four_epsilon + 0.018,
+                threshold_ymax + 0.05,
+                f"$4\\epsilon$ = {four_epsilon:.3f}",
+                ha="left",
+                va="bottom",
+                fontsize=9,
+                zorder=7,
+                bbox={"facecolor": "white", "edgecolor": "none", "alpha": 0.9, "pad": 1.1},
+            )
+            max_right_limit = max(max_right_limit, four_epsilon + 0.22)
+
     for threshold in [0.0, tsirelson_violation]:
         ax.axvline(
             x=threshold,
@@ -2480,6 +2751,8 @@ def plot_accuracy_comparison(
     ylabel: str,
     ideal_value: float,
     ideal_label: str,
+    show_legend: bool,
+    y_max_override: Optional[float],
     filename: str,
 ) -> Path:
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -2487,7 +2760,17 @@ def plot_accuracy_comparison(
     values = backend_values(results, value_key)
     errors = backend_values(results, error_key)
     x = np.arange(len(BACKEND_LABELS))
-    y_max = 1.22 if np.isclose(ideal_value, 1.0) else 1.14
+    max_reference = max(
+        [ideal_value] + [value + error for value, error in zip(values, errors) if np.isfinite(value) and np.isfinite(error)]
+    )
+    if y_max_override is not None:
+        y_max = float(y_max_override)
+    elif np.isclose(ideal_value, 1.0):
+        y_max = max(1.08, min(1.10, max_reference + 0.06))
+    else:
+        y_max = min(1.0, max_reference + 0.08)
+    bar_width = 0.62
+    target_width = 0.82
 
     fig, ax = plt.subplots(figsize=(9.2, 5.6))
     bars = ax.bar(
@@ -2496,38 +2779,43 @@ def plot_accuracy_comparison(
         yerr=errors,
         capsize=5,
         ecolor="#333333",
-        color=[BACKEND_COLORS[label] for label in BACKEND_LABELS],
+        width=bar_width,
+        color=[ACCURACY_BACKEND_COLORS[label] for label in BACKEND_LABELS],
         edgecolor="black",
         linewidth=1.0,
+        zorder=2,
+    )
+    draw_accuracy_target_blocks(
+        ax,
+        x,
+        [ideal_value] * len(x),
+        width=target_width,
     )
     annotate_vertical_bars(
         ax,
         bars,
         values,
         errors=errors,
-        upper_cap=y_max - 0.13,
-        positive_offset=0.03,
+        upper_cap=y_max - 0.02,
+        positive_offset=0.02,
         reference_values=[ideal_value] * len(values),
     )
 
-    ax.axhline(
-        ideal_value,
-        color=THEORY_LINE_COLOR,
-        linestyle="--",
-        linewidth=1.8,
-        label=ideal_label,
-    )
     ax.set_xticks(x)
     ax.set_xticklabels([result_axis_label(result_for_label(results, label)) for label in BACKEND_LABELS])
     ax.set_ylim(0.0, y_max)
-    style_bar_axes(ax, title, ylabel)
-    ax.legend(
-        loc="upper right",
-        fontsize=10,
-        frameon=True,
-        bbox_to_anchor=(0.985, 0.99),
-    )
-    fig.tight_layout()
+    style_accuracy_axes(ax, ylabel)
+    set_probability_axis_ticks(ax, y_max)
+    if show_legend:
+        place_legend_above_axes(
+            fig,
+            ax,
+            ncol=1,
+            fontsize=10,
+            handles=[Line2D([], [], color=ACCURACY_THEORY_LINE_COLOR, linestyle="--", linewidth=2.0, label=ideal_label)],
+        )
+    else:
+        fig.tight_layout()
 
     plot_path = output_dir / filename
     save_plot(fig, plot_path, dpi=300, bbox_inches="tight")
@@ -2546,6 +2834,8 @@ def plot_accuracy_metric(results, output_dir: Path, metric_key: str) -> Path:
         ylabel=spec["ylabel"],
         ideal_value=spec["ideal_value"],
         ideal_label=spec["ideal_label"],
+        show_legend=spec["show_legend"],
+        y_max_override=spec["y_max"],
         filename=spec["filename"],
     )
 
@@ -2702,7 +2992,13 @@ def main():
     correlators_comparison_dir = correlators_dir / "comparison"
     memory_inaccuracy_summary = build_memory_inaccuracy_summary(memory_inaccuracy_results)
     memory_inaccuracy_folder_path = memory_initialization_dir / "memory_inaccuracy.json"
+    tracking_epsilon_max_path = memory_initialization_dir / "tracking_epsilon_max_values.json"
+    payoff_value_summary_path = comparison_dir / "payoff_comparison_values.json"
+    tracking_epsilon_max_summary = build_tracking_epsilon_max_summary(results)
+    payoff_value_summary = build_payoff_value_summary(results)
     save_json(memory_inaccuracy_folder_path, memory_inaccuracy_summary)
+    save_json(tracking_epsilon_max_path, tracking_epsilon_max_summary)
+    save_json(payoff_value_summary_path, payoff_value_summary)
 
     born_rule_accuracy_plot_path = plot_born_rule_accuracy(results, accuracy_dir)
     save_plot_metadata(
@@ -2759,6 +3055,7 @@ def main():
     combined_memory_epsilon_plot_path = plot_combined_memory_epsilon(
         memory_inaccuracy_summary,
         memory_initialization_dir,
+        tracking_epsilon_max_summary,
     )
     save_plot_metadata(
         combined_memory_epsilon_plot_path,
@@ -2782,6 +3079,7 @@ def main():
     print(f"Saved reflex S_a/M agreement accuracy plot to: {reflex_sa_m_plot_path} (PDF: {pdf_plot_path(reflex_sa_m_plot_path)})")
     print(f"Saved always-3/4 accuracy plot to: {always_large_accuracy_plot_path} (PDF: {pdf_plot_path(always_large_accuracy_plot_path)})")
     print(f"Saved memory inaccuracy summary to: {memory_inaccuracy_folder_path}")
+    print(f"Saved tracking epsilon-max values to: {tracking_epsilon_max_path}")
     print(f"Saved combined memory epsilon plot to: {combined_memory_epsilon_plot_path} (PDF: {pdf_plot_path(combined_memory_epsilon_plot_path)})")
     for result in memory_inaccuracy_results:
         if not result.get("available", True):

@@ -80,7 +80,7 @@ BACKEND_SPECS = {
         "output_prefix": OUTPUT_DIR / "ibm_torino_betting_layout_simple",
         "agent_output_prefix": OUTPUT_DIR / "ibm_torino_agent_connectivity_simple",
         "figure_size": (30, 22),
-        "agent_figure_size": (20, 6.4),
+        "agent_figure_size": (19, 6.4),
         "node_size": 3600,
         "agent_node_size": 2400,
         "agent_backdrop_node_size": 360,
@@ -88,7 +88,7 @@ BACKEND_SPECS = {
         "agent_edge_width": 7,
         "agent_backdrop_edge_width": 2.2,
         "label_size": 32,
-        "agent_label_size": 13,
+        "agent_label_size": 16,
         "title_size": 38,
         "agent_title_size": 26,
         "title": (
@@ -121,7 +121,7 @@ BACKEND_SPECS = {
         "agent_edge_width": 4,
         "agent_backdrop_edge_width": 1.8,
         "label_size": 20,
-        "agent_label_size": 9,
+        "agent_label_size": 12,
         "title_size": 30,
         "agent_title_size": 22,
         "title": (
@@ -227,7 +227,7 @@ def agent_plot_data(agent_name: str, layout: list[int]) -> dict[str, object]:
     ]
     red_edges = [edge for edge in highlighted_edges if edge not in green_edges]
     labels = {
-        physical: f"{logical_names[index]}\n{physical}"
+        physical: ("" if logical_names[index] in {"Achoice", "Bchoice"} else logical_names[index])
         for index, physical in enumerate(layout)
     }
     node_groups = {
@@ -254,6 +254,49 @@ def agent_plot_data(agent_name: str, layout: list[int]) -> dict[str, object]:
 
 def induced_edges(graph: nx.Graph, nodes: list[int]) -> list[tuple[int, int]]:
     return sorted(tuple(sorted(edge)) for edge in graph.subgraph(nodes).edges())
+
+
+def draw_labels_with_choice_contrast(
+    graph: nx.Graph,
+    positions: dict[int, tuple[float, float]],
+    labels: dict[int, str],
+    choice_nodes: list[int],
+    font_size: int,
+    ax,
+) -> None:
+    """Draw white labels by default, but use black on yellow choice qubits."""
+    choice_node_set = set(choice_nodes)
+    standard_labels = {
+        node: label
+        for node, label in labels.items()
+        if node not in choice_node_set
+    }
+    choice_labels = {
+        node: label
+        for node, label in labels.items()
+        if node in choice_node_set
+    }
+
+    if standard_labels:
+        nx.draw_networkx_labels(
+            graph,
+            positions,
+            labels=standard_labels,
+            font_size=font_size,
+            font_color="white",
+            font_weight="bold",
+            ax=ax,
+        )
+    if choice_labels:
+        nx.draw_networkx_labels(
+            graph,
+            positions,
+            labels=choice_labels,
+            font_size=font_size,
+            font_color="black",
+            font_weight="bold",
+            ax=ax,
+        )
 
 
 def add_position_padding(
@@ -426,7 +469,14 @@ def plot_backend_betting_layout_simple(backend_name: str = BACKEND_NAME) -> None
         linewidths=3,
         ax=ax,
     )
-    nx.draw_networkx_labels(graph, positions, font_size=spec["label_size"], font_color="white", ax=ax)
+    draw_labels_with_choice_contrast(
+        graph,
+        positions,
+        labels={node: str(node) for node in graph.nodes()},
+        choice_nodes=choice_qubits,
+        font_size=spec["label_size"],
+        ax=ax,
+    )
 
     ax.axis("off")
     ax.set_aspect("equal")
@@ -528,12 +578,12 @@ def plot_backend_agent_connectivity_simple(backend_name: str = BACKEND_NAME) -> 
                 ax=ax,
             )
 
-        nx.draw_networkx_labels(
+        draw_labels_with_choice_contrast(
             graph,
             local_positions,
             labels=plot_data["labels"],
+            choice_nodes=plot_data["node_groups"]["choice"],
             font_size=spec["agent_label_size"],
-            font_color="white",
             ax=ax,
         )
 
@@ -546,7 +596,7 @@ def plot_backend_agent_connectivity_simple(backend_name: str = BACKEND_NAME) -> 
         ax.set_aspect("equal")
         ax.axis("off")
 
-    plt.tight_layout(w_pad=0.15, pad=0.3)
+    plt.tight_layout(w_pad=0.05, pad=0.3)
 
     for suffix in ("png", "pdf"):
         plt.savefig(agent_output_prefix_with_suffix(backend_name, suffix), bbox_inches="tight", pad_inches=0.2)
