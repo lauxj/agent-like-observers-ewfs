@@ -7,8 +7,10 @@ Automatically choose the best qubit layout when calibration CSV data is availabl
 import warnings
 from pathlib import Path
 from datetime import datetime
+import json
 import matplotlib.pyplot as plt
 from qiskit import transpile
+from qiskit.exceptions import MissingOptionalLibraryError
 from qiskit.visualization import circuit_drawer
 from qiskit_ibm_runtime import QiskitRuntimeService
 
@@ -80,11 +82,24 @@ MANUAL_LAYOUTS_BY_BACKEND = {
     },
 }
 
+BACKEND_LAYOUT_ALIASES = {
+    "fake_torino": "ibm_torino",
+    "fake_fez": "ibm_fez",
+    "fake_marrakesh": "ibm_marrakesh",
+}
+
 OPT_LEVEL = 0
 ACCURACY_TEST_INFIX = "_accuracy_test_"
 SHARED_LAYOUT_REFERENCE = {
     "Always 3/4 Agent": "Betting Agent",
 }
+LF_RELEVANT_QUBITS_BY_AGENT = {
+    "Reflex Agent": ["Achoice", "Bchoice", "M", "SA", "SB"],
+    "Guessing Agent": ["Achoice", "Bchoice", "M1", "SA", "SB"],
+    "Betting Agent": ["Achoice", "Bchoice", "M1", "SA", "SB"],
+    "Always 3/4 Agent": ["Achoice", "Bchoice", "M1", "SA", "SB"],
+}
+NON_GATE_OPS = {"barrier", "delay"}
 
 
 def safe_label(label: str) -> str:
@@ -126,6 +141,12 @@ def make_run_folder_name(backend, folder_ts=None):
     return folder_ts, f"{backend.name}_{folder_ts}"
 
 
+def save_json(path: Path, obj):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(obj, f, indent=2)
+
+
 def resolve_plots_dir(backend, plots_dir=None, folder_ts=None, category="transpilation_only"):
     """Resolve a run-specific transpilation plot directory."""
     if plots_dir is not None:
@@ -137,6 +158,8 @@ def resolve_plots_dir(backend, plots_dir=None, folder_ts=None, category="transpi
 
 def get_manual_layout(backend_name, circuit_qubit_count):
     """Return the manual layout for one backend and circuit size."""
+    backend_name = BACKEND_LAYOUT_ALIASES.get(backend_name, backend_name)
+
     try:
         layouts_by_size = MANUAL_LAYOUTS_BY_BACKEND[backend_name]
     except KeyError as exc:
@@ -234,6 +257,9 @@ def transpile_agent_circuit(agent_name, build_fn, backend, save_plots=True, plot
     cz_n = ops.get("cz", 0)
     print(f"    depth={tqc.depth()}, cz={cz_n}")
 
+    tqc.metadata = dict(tqc.metadata or {})
+    tqc.metadata["ewfs_metrics"] = transpiled_circuit_metrics(agent_name, tqc, qc)
+
     if save_plots:
         tqc.name = agent_name
         base_plot_dir = plots_dir if plots_dir is not None else PLOT_DIR
@@ -244,12 +270,185 @@ def transpile_agent_circuit(agent_name, build_fn, backend, save_plots=True, plot
         plot_path = agent_dir / filename
         wire_order = build_plot_wire_order(qc, tqc)
 
-        fig = circuit_drawer(tqc, output="mpl", fold=-1, wire_order=wire_order)
-        fig.suptitle(f"{agent_name} – Transpiled Circuit", fontsize=14)
-        fig.savefig(plot_path, dpi=300, bbox_inches="tight")
-        plt.close(fig)
+        try:
+            fig = circuit_drawer(tqc, output="mpl", fold=-1, wire_order=wire_order)
+        except MissingOptionalLibraryError as exc:
+            print(f"    skipped circuit plot ({exc})")
+        else:
+            fig.suptitle(f"{agent_name} – Transpiled Circuit", fontsize=14)
+            fig.savefig(plot_path, dpi=300, bbox_inches="tight")
+            if fig._suptitle is not None:
+                fig._suptitle.remove()
+            fig.savefig(plot_path.with_suffix(".pdf"), dpi=300, bbox_inches="tight")
+            plt.close(fig)
 
     return tqc
+
+
+def qubit_register_label(qubit, circuit=None):
+    """Return a stable logical label for one original-circuit qubit."""
+    if circuit is not None:
+        bit_locations = circuit.find_bit(qubit).registers
+        if bit_locations:
+            register, index = bit_locations[0]
+            return register.name if len(register) == 1 else f"{register.name}[{index}]"
+
+    register = getattr(qubit, "_register", None)
+    index = getattr(qubit, "_index", None)
+    if register is not None and index is not None:
+        return register.name if len(register) == 1 else f"{register.name}[{index}]"
+
+    return str(qubit)
+
+
+def build_logical_physical_qubit_map(original_qc, transpiled_qc):
+    """Map original logical qubit labels to physical qubit indices after layout."""
+    transpile_layout = getattr(transpiled_qc, "layout", None)
+    initial_layout = getattr(transpile_layout, "initial_layout", None)
+    if initial_layout is None:
+        return {}
+
+    physical_by_virtual = initial_layout.get_virtual_bits()
+    mapping = {}
+    for qubit in original_qc.qubits:
+        physical = physical_by_virtual.get(qubit)
+        if physical is None:
+            continue
+        mapping[qubit_register_label(qubit, original_qc)] = int(physical)
+    return mapping
+
+
+def count_ops_on_physical_qubits(circuit, physical_qubits, parent_qubit_map=None):
+    """
+    Count operations touching each selected physical qubit.
+
+    Control-flow blocks are expanded so conditional gates contribute to the
+    relevant qubits instead of being hidden behind a single if_else operation.
+    """
+    physical_qubits = set(physical_qubits)
+    per_physical = {
+        int(physical): {
+            "quantum_gate_count": 0,
+            "measurement_count": 0,
+            "op_counts": {},
+        }
+        for physical in sorted(physical_qubits)
+    }
+    unique_touching_op_count = 0
+
+    def local_to_physical(qubit):
+        local_index = circuit.find_bit(qubit).index
+        if parent_qubit_map is None:
+            return local_index
+        return parent_qubit_map.get(local_index)
+
+    for instruction in circuit.data:
+        operation = instruction.operation
+        op_name = operation.name
+        operation_qubits = [local_to_physical(qubit) for qubit in instruction.qubits]
+        operation_qubits = [qubit for qubit in operation_qubits if qubit is not None]
+
+        if getattr(operation, "blocks", None):
+            for block in operation.blocks:
+                block_parent_map = {
+                    block_index: operation_qubits[block_index]
+                    for block_index in range(min(len(block.qubits), len(operation_qubits)))
+                }
+                nested_counts, nested_unique = count_ops_on_physical_qubits(
+                    block,
+                    physical_qubits,
+                    parent_qubit_map=block_parent_map,
+                )
+                unique_touching_op_count += nested_unique
+                for physical, metrics in nested_counts.items():
+                    for nested_op_name, nested_count in metrics["op_counts"].items():
+                        per_physical[physical]["op_counts"][nested_op_name] = (
+                            per_physical[physical]["op_counts"].get(nested_op_name, 0)
+                            + nested_count
+                        )
+                    per_physical[physical]["quantum_gate_count"] += metrics["quantum_gate_count"]
+                    per_physical[physical]["measurement_count"] += metrics["measurement_count"]
+            continue
+
+        if op_name in NON_GATE_OPS:
+            continue
+
+        touched_physical = sorted(set(operation_qubits) & physical_qubits)
+        if not touched_physical:
+            continue
+
+        unique_touching_op_count += 1
+        for physical in touched_physical:
+            per_physical[physical]["op_counts"][op_name] = (
+                per_physical[physical]["op_counts"].get(op_name, 0) + 1
+            )
+            if op_name == "measure":
+                per_physical[physical]["measurement_count"] += 1
+            else:
+                per_physical[physical]["quantum_gate_count"] += 1
+
+    return per_physical, unique_touching_op_count
+
+
+def lf_relevant_qubit_metrics(agent_name, original_qc, transpiled_qc):
+    """Return per-qubit transpiled gate counts for the bits used in LF violations."""
+    relevant_labels = LF_RELEVANT_QUBITS_BY_AGENT.get(agent_name, [])
+    logical_to_physical = build_logical_physical_qubit_map(original_qc, transpiled_qc)
+    relevant_physical = [
+        logical_to_physical[label]
+        for label in relevant_labels
+        if label in logical_to_physical
+    ]
+    per_physical, unique_touching_op_count = count_ops_on_physical_qubits(
+        transpiled_qc,
+        relevant_physical,
+    )
+
+    metrics = []
+    for label in relevant_labels:
+        physical = logical_to_physical.get(label)
+        if physical is None:
+            continue
+        qubit_counts = per_physical.get(physical, {})
+        metrics.append(
+            {
+                "logical_qubit": label,
+                "physical_qubit": int(physical),
+                "quantum_gate_count": int(qubit_counts.get("quantum_gate_count", 0)),
+                "measurement_count": int(qubit_counts.get("measurement_count", 0)),
+                "op_counts": {
+                    name: int(count)
+                    for name, count in sorted(qubit_counts.get("op_counts", {}).items())
+                },
+            }
+        )
+
+    quantum_gate_touches = sum(item["quantum_gate_count"] for item in metrics)
+    measurement_touches = sum(item["measurement_count"] for item in metrics)
+
+    return {
+        "labels": relevant_labels,
+        "unique_operations_touching_lf_qubits": int(unique_touching_op_count),
+        "quantum_gate_touches": int(quantum_gate_touches),
+        "measurement_touches": int(measurement_touches),
+        "per_qubit": metrics,
+    }
+
+
+def transpiled_circuit_metrics(agent_name, tqc, original_qc=None):
+    ops = dict(tqc.count_ops())
+    metrics = {
+        "agent_name": agent_name,
+        "depth": int(tqc.depth()),
+        "cz_count": int(ops.get("cz", 0)),
+        "size": int(tqc.size()),
+        "num_qubits": int(tqc.num_qubits),
+        "num_clbits": int(tqc.num_clbits),
+        "operations": {name: int(count) for name, count in ops.items()},
+    }
+    if original_qc is not None:
+        metrics["lf_relevant_qubits"] = lf_relevant_qubit_metrics(agent_name, original_qc, tqc)
+    return metrics
 
 
 def transpile_all_agents(
@@ -272,15 +471,30 @@ def transpile_all_agents(
             category=plot_category,
         )
     out = {}
+    metrics = []
     selected_agents = list(agent_builders) if agent_builders is not None else AGENTS
     for agent_name, build_fn in selected_agents:
-        out[agent_name] = transpile_agent_circuit(
+        tqc = transpile_agent_circuit(
             agent_name=agent_name,
             build_fn=build_fn,
             backend=backend,
             save_plots=save_plots,
             plots_dir=resolved_plots_dir,
         )
+        out[agent_name] = tqc
+        metrics.append(tqc.metadata.get("ewfs_metrics", transpiled_circuit_metrics(agent_name, tqc)))
+
+    if save_plots and resolved_plots_dir is not None:
+        save_json(
+            resolved_plots_dir / "transpiled_circuit_metrics.json",
+            {
+                "backend": backend.name,
+                "optimization_level": int(OPT_LEVEL),
+                "use_auto_layout": bool(USE_AUTO_LAYOUT),
+                "agents": metrics,
+            },
+        )
+
     return out
 
 

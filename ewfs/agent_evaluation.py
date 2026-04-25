@@ -75,8 +75,8 @@ REFLEX_M_INDEX_FROM_LEFT = 3
 
 LF_AGENT_NAMES = ["Betting Agent", "Guessing Agent", "Reflex Agent", "Always 3/4 Agent"]
 STANDARD_AGENT_NAMES = LF_AGENT_NAMES
-MEMORY_PLOT_AGENT_NAMES = ["Reflex Agent", "Guessing Agent", "Betting Agent"]
-HARDWARE_LF_SUMMARY_AGENT_NAMES = ["Reflex Agent", "Guessing Agent", "Betting Agent"]
+MEMORY_PLOT_AGENT_NAMES = ["Reflex Agent", "Guessing Agent", "Always 3/4 Agent", "Betting Agent"]
+HARDWARE_LF_SUMMARY_AGENT_NAMES = ["Reflex Agent", "Guessing Agent", "Betting Agent", "Always 3/4 Agent"]
 LF_TERM_SPECS = [
     ("E11", -1.0, r"$-\langle A_1 B_1 \rangle$"),
     ("E12", 1.0, r"$\langle A_1 B_2 \rangle$"),
@@ -144,7 +144,7 @@ PAYOFF_COLORS = [
 # Toggle these to restore the cleaner LF figures without the 4 epsilon guides.
 SHOW_FOUR_EPSILON_IN_BACKEND_LF_PLOTS = False
 SHOW_FOUR_EPSILON_IN_HARDWARE_LF_COMPARISON_PLOTS = False
-SHOW_FOUR_EPSILON_IN_HARDWARE_LF_SUMMARY_PLOT = False
+SHOW_FOUR_EPSILON_IN_HARDWARE_LF_SUMMARY_PLOT = True
 ACCURACY_METRIC_SPECS = {
     "guessing_accuracy": {
         "value_key": "guessing_accuracy",
@@ -849,7 +849,12 @@ def build_hardware_lf_comparison_metadata(results, agent_name: str):
     return metadata
 
 
-def build_hardware_lf_agent_summary_metadata(results, memory_inaccuracy_summary=None):
+def build_hardware_lf_agent_summary_metadata(
+    results,
+    memory_inaccuracy_summary=None,
+    *,
+    show_epsilon_bounds: bool = False,
+):
     real_result = result_for_label(results, "Real hardware")
     agent_rows = []
 
@@ -864,6 +869,7 @@ def build_hardware_lf_agent_summary_metadata(results, memory_inaccuracy_summary=
                 "s_error": float(s_summary["stderr"]),
                 "run_count": int(real_series["_run_count"]),
                 "four_epsilon": None if epsilon is None else float(4.0 * epsilon),
+                "four_epsilon_max": four_epsilon_max_from_s_summary(s_summary),
                 "correlators": {
                     key: {
                         "value": float(real_series[key]["value"]),
@@ -886,6 +892,7 @@ def build_hardware_lf_agent_summary_metadata(results, memory_inaccuracy_summary=
     )
     metadata["backend_label"] = "Real hardware"
     metadata["backend_display_label"] = result_display_label(real_result)
+    metadata["show_epsilon_bounds"] = bool(show_epsilon_bounds)
     metadata["ideal_reference"] = {
         "correlators": {key: float(LF_ANALYTIC_CORRELATORS[key]) for key, _, _ in LF_TERM_SPECS},
         "s_value": float(2.0 * np.sqrt(2.0) - 2.0),
@@ -1678,6 +1685,10 @@ def lookup_combined_memory_epsilon(memory_inaccuracy_summary, backend_label: str
     return float(epsilon)
 
 
+def four_epsilon_max_from_s_summary(s_summary: dict) -> float:
+    return float(s_summary["value"] - 3.0 * s_summary["stderr"])
+
+
 def build_tracking_epsilon_max_summary(results, backend_label: str = "Real hardware") -> dict:
     backend_result = result_for_label(results, backend_label)
     agents = {}
@@ -1687,7 +1698,7 @@ def build_tracking_epsilon_max_summary(results, backend_label: str = "Real hardw
         s_summary = series["_s_summary"]
         s_obs = float(s_summary["value"])
         sigma_l = float(s_summary["stderr"])
-        epsilon_max = (s_obs - 3.0 * sigma_l) / 4.0
+        epsilon_max = four_epsilon_max_from_s_summary(s_summary) / 4.0
 
         agents[agent_name] = {
             "s_obs": s_obs,
@@ -1701,14 +1712,14 @@ def build_tracking_epsilon_max_summary(results, backend_label: str = "Real hardw
         "description": (
             "Maximum allowed tracking error epsilon inferred from the aggregated LF "
             "violation summaries. Values are computed from the selected runs using "
-            "epsilon_max = (S_obs - 3*sigma_L)/4."
+            "epsilon_max = (S_obs - 3*sigma)/4."
         ),
         "backend_label": backend_label,
         "backend_display_label": result_display_label(backend_result),
         "selection_mode": backend_result["selection_mode"],
         "run_count": int(backend_result["run_count"]),
         "run_names": list(backend_result["run_names"]),
-        "criterion": "S_obs - 3*sigma_L > 4*epsilon",
+        "criterion": "S_obs - 3*sigma > 4*epsilon",
         "agents": agents,
     }
 
@@ -2565,7 +2576,13 @@ def plot_hardware_lf_comparison_per_agent(results, output_dir: Path, memory_inac
     return saved_paths
 
 
-def plot_hardware_lf_agent_summary(results, output_dir: Path, memory_inaccuracy_summary=None) -> Path:
+def plot_hardware_lf_agent_summary(
+    results,
+    output_dir: Path,
+    memory_inaccuracy_summary=None,
+    *,
+    show_epsilon_bounds: bool = False,
+) -> Path:
     output_dir.mkdir(parents=True, exist_ok=True)
 
     classical_bound = 2.0
@@ -2586,6 +2603,7 @@ def plot_hardware_lf_agent_summary(results, output_dir: Path, memory_inaccuracy_
                 "signed_values": np.array([sign * real_series[key]["value"] for key, sign, _ in LF_TERM_SPECS]),
                 "signed_errors": np.array([real_series[key]["stderr"] for key, _, _ in LF_TERM_SPECS]),
                 "four_epsilon": None if epsilon is None else 4.0 * epsilon,
+                "four_epsilon_max": four_epsilon_max_from_s_summary(real_series["_s_summary"]),
             }
         )
 
@@ -2678,30 +2696,38 @@ def plot_hardware_lf_agent_summary(results, output_dir: Path, memory_inaccuracy_
         )
         max_right_limit = max(max_right_limit, final_text_x + 0.42)
 
-        four_epsilon = row["four_epsilon"]
-        if SHOW_FOUR_EPSILON_IN_HARDWARE_LF_SUMMARY_PLOT and four_epsilon is not None and np.isfinite(four_epsilon):
+        if show_epsilon_bounds:
             threshold_ymin = y_pos - (theory_height / 2.0 + 0.05)
             threshold_ymax = y_pos + (theory_height / 2.0 + 0.05)
-            ax.vlines(
-                four_epsilon,
-                threshold_ymin,
-                threshold_ymax,
-                colors="black",
-                linestyles="--",
-                linewidth=1.8,
-                zorder=6,
-            )
-            ax.text(
-                four_epsilon + 0.018,
-                threshold_ymax + 0.05,
-                f"$4\\epsilon$ = {four_epsilon:.3f}",
-                ha="left",
-                va="bottom",
-                fontsize=9,
-                zorder=7,
-                bbox={"facecolor": "white", "edgecolor": "none", "alpha": 0.9, "pad": 1.1},
-            )
-            max_right_limit = max(max_right_limit, four_epsilon + 0.22)
+            four_epsilon_markers = []
+            four_epsilon = row["four_epsilon"]
+            if four_epsilon is not None and np.isfinite(four_epsilon):
+                four_epsilon_markers.append((float(four_epsilon), r"$4\epsilon$"))
+            four_epsilon_max = row["four_epsilon_max"]
+            if four_epsilon_max is not None and np.isfinite(four_epsilon_max):
+                four_epsilon_markers.append((float(four_epsilon_max), r"$4\epsilon_{\max}$"))
+
+            for marker_value, marker_label in four_epsilon_markers:
+                ax.vlines(
+                    marker_value,
+                    threshold_ymin,
+                    threshold_ymax,
+                    colors="black",
+                    linestyles="-",
+                    linewidth=1.8,
+                    zorder=6,
+                )
+                ax.text(
+                    marker_value,
+                    threshold_ymax + 0.04,
+                    marker_label,
+                    ha="center",
+                    va="bottom",
+                    fontsize=8,
+                    zorder=7,
+                    bbox={"facecolor": "white", "edgecolor": "none", "alpha": 0.85, "pad": 0.8},
+                )
+                max_right_limit = max(max_right_limit, marker_value + 0.22)
 
     for threshold in [0.0, tsirelson_violation]:
         ax.axvline(
@@ -2733,9 +2759,16 @@ def plot_hardware_lf_agent_summary(results, output_dir: Path, memory_inaccuracy_
             Line2D([], [], color="black", linewidth=1.5, marker="|", markersize=10, label="Standard error of the mean"),
         ]
     )
-    place_legend_above_axes(fig, ax, ncol=3, fontsize=10, handles=legend_handles)
+    place_legend_above_axes(
+        fig,
+        ax,
+        ncol=3,
+        fontsize=10,
+        handles=legend_handles,
+    )
 
-    plot_path = output_dir / "hardware_agent_lf_violation_summary.png"
+    suffix = "_epsilon" if show_epsilon_bounds else ""
+    plot_path = output_dir / f"hardware_agent_lf_violation_summary{suffix}.png"
     save_plot(fig, plot_path, dpi=300, bbox_inches="tight")
     plt.close(fig)
     return plot_path
@@ -3043,10 +3076,29 @@ def main():
         results,
         correlators_comparison_dir,
         memory_inaccuracy_summary,
+        show_epsilon_bounds=False,
     )
     save_plot_metadata(
         hardware_agent_summary_plot_path,
-        build_hardware_lf_agent_summary_metadata(results, memory_inaccuracy_summary),
+        build_hardware_lf_agent_summary_metadata(
+            results,
+            memory_inaccuracy_summary,
+            show_epsilon_bounds=False,
+        ),
+    )
+    hardware_agent_summary_epsilon_plot_path = plot_hardware_lf_agent_summary(
+        results,
+        correlators_comparison_dir,
+        memory_inaccuracy_summary,
+        show_epsilon_bounds=True,
+    )
+    save_plot_metadata(
+        hardware_agent_summary_epsilon_plot_path,
+        build_hardware_lf_agent_summary_metadata(
+            results,
+            memory_inaccuracy_summary,
+            show_epsilon_bounds=True,
+        ),
     )
     guessing_plot_path = save_accuracy_metric_plot(results, accuracy_dir, "guessing_accuracy")
     reflex_plot_path = save_accuracy_metric_plot(results, accuracy_dir, "reflex_accuracy")
@@ -3055,7 +3107,6 @@ def main():
     combined_memory_epsilon_plot_path = plot_combined_memory_epsilon(
         memory_inaccuracy_summary,
         memory_initialization_dir,
-        tracking_epsilon_max_summary,
     )
     save_plot_metadata(
         combined_memory_epsilon_plot_path,
@@ -3074,6 +3125,7 @@ def main():
     for plot_path in hardware_comparison_lf_plot_paths:
         print(f"Saved combined hardware LF correlator plot to: {plot_path} (PDF: {pdf_plot_path(plot_path)})")
     print(f"Saved hardware LF agent summary plot to: {hardware_agent_summary_plot_path} (PDF: {pdf_plot_path(hardware_agent_summary_plot_path)})")
+    print(f"Saved hardware LF agent summary epsilon plot to: {hardware_agent_summary_epsilon_plot_path} (PDF: {pdf_plot_path(hardware_agent_summary_epsilon_plot_path)})")
     print(f"Saved guessing accuracy plot to: {guessing_plot_path} (PDF: {pdf_plot_path(guessing_plot_path)})")
     print(f"Saved reflex accuracy plot to: {reflex_plot_path} (PDF: {pdf_plot_path(reflex_plot_path)})")
     print(f"Saved reflex S_a/M agreement accuracy plot to: {reflex_sa_m_plot_path} (PDF: {pdf_plot_path(reflex_sa_m_plot_path)})")

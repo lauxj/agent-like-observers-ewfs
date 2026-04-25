@@ -6,7 +6,7 @@ Set BACKEND_NAME to either "ibm_torino" or "ibm_marrakesh", and it will:
 1. load the matching SVG geometry so the device still looks like a grid,
 2. draw the full coupling map in black,
 3. highlight the hard-coded Betting Agent / Always 3/4 layout,
-4. create an agent-only comparison plot for Reflex, Guessing, and Betting.
+4. create an agent-only comparison plot for Reflex, Guessing, Betting, and Always 3/4.
 """
 
 from __future__ import annotations
@@ -23,6 +23,7 @@ from qiskit_ibm_runtime.fake_provider import FakeMarrakesh, FakeTorino
 
 try:
     from ewfs.agents import (
+        build_circuit_always_large,
         build_circuit_betting,
         build_circuit_guessing,
         build_circuit_reflex,
@@ -30,6 +31,7 @@ try:
     from ewfs.find_best_agent_layouts import ordered_qubit_names, summarize_circuit
 except ModuleNotFoundError:
     from agents import (
+        build_circuit_always_large,
         build_circuit_betting,
         build_circuit_guessing,
         build_circuit_reflex,
@@ -63,6 +65,7 @@ MARRAKESH_SVG_GEOMETRY_CANDIDATES = [
 AGENT_BUILDERS = {
     "Reflex Agent": build_circuit_reflex,
     "Guessing Agent": build_circuit_guessing,
+    "Always 3/4 Agent": build_circuit_always_large,
     "Betting Agent": build_circuit_betting,
 }
 
@@ -80,7 +83,7 @@ BACKEND_SPECS = {
         "output_prefix": OUTPUT_DIR / "ibm_torino_betting_layout_simple",
         "agent_output_prefix": OUTPUT_DIR / "ibm_torino_agent_connectivity_simple",
         "figure_size": (30, 22),
-        "agent_figure_size": (19, 6.4),
+        "agent_figure_size": (25, 6.4),
         "node_size": 3600,
         "agent_node_size": 2400,
         "agent_backdrop_node_size": 360,
@@ -97,13 +100,14 @@ BACKEND_SPECS = {
         ),
         "agent_title": (
             "ibm_torino agent connectivity (March 30, 2026)\n"
-            "Reflex, Guessing, and Betting agent structure only"
+            "Reflex, Guessing, Always 3/4, and Betting agent structure only"
         ),
         "betting_layout": [68, 67, 66, 74, 65, 86, 18, 131],
         "agent_layouts": {
             "Reflex Agent": [54, 61, 62, 63, 14, 129],
             "Guessing Agent": [54, 61, 62, 60, 63, 14, 129],
             "Betting Agent": [68, 67, 66, 74, 65, 86, 18, 131],
+            "Always 3/4 Agent": [68, 67, 66, 74, 65, 86, 18, 131],
         },
     },
     "ibm_marrakesh": {
@@ -113,7 +117,7 @@ BACKEND_SPECS = {
         "output_prefix": OUTPUT_DIR / "ibm_marrakesh_betting_layout_simple",
         "agent_output_prefix": OUTPUT_DIR / "ibm_marrakesh_agent_connectivity_simple",
         "figure_size": (26, 18),
-        "agent_figure_size": (20, 6.4),
+        "agent_figure_size": (26, 6.4),
         "node_size": 2600,
         "agent_node_size": 1650,
         "agent_backdrop_node_size": 280,
@@ -130,13 +134,14 @@ BACKEND_SPECS = {
         ),
         "agent_title": (
             "ibm_marrakesh agent connectivity (latest hard-coded real-hardware layouts)\n"
-            "Reflex, Guessing, and Betting agent structure only"
+            "Reflex, Guessing, Always 3/4, and Betting agent structure only"
         ),
         "betting_layout": [18, 11, 12, 10, 13, 9, 0, 155],
         "agent_layouts": {
             "Reflex Agent": [10, 11, 12, 13, 0, 155],
             "Guessing Agent": [10, 11, 12, 18, 13, 0, 155],
             "Betting Agent": [18, 11, 12, 10, 13, 9, 0, 155],
+            "Always 3/4 Agent": [18, 11, 12, 10, 13, 9, 0, 155],
         },
     },
 }
@@ -488,7 +493,7 @@ def plot_backend_betting_layout_simple(backend_name: str = BACKEND_NAME) -> None
 
 
 def plot_backend_agent_connectivity_simple(backend_name: str = BACKEND_NAME) -> None:
-    """Render Reflex, Guessing, and Betting connectivity using only their qubits."""
+    """Render each agent's connectivity using only its assigned qubits."""
     if backend_name not in BACKEND_SPECS:
         known = ", ".join(sorted(BACKEND_SPECS))
         raise ValueError(f"Unknown backend '{backend_name}'. Known backends: {known}")
@@ -502,7 +507,8 @@ def plot_backend_agent_connectivity_simple(backend_name: str = BACKEND_NAME) -> 
     graph = build_backend_graph(backend_name)
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
-    fig, axes = plt.subplots(1, 3, figsize=spec["agent_figure_size"])
+    fig, axes = plt.subplots(1, len(AGENT_BUILDERS), figsize=spec["agent_figure_size"])
+    axes = np.atleast_1d(axes)
     panel_data = []
     max_x_span = 0.0
     max_y_span = 0.0

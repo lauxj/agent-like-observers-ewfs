@@ -89,7 +89,11 @@ def run_noiseless_simulation(
             fig = qc.draw(output="mpl", fold=-1)
             fig.suptitle(f"{name} – Quantum Circuit", fontsize=14)
             filename = f"{safe_name}_circuit.png"
-            fig.savefig(agent_folder / filename, dpi=300, bbox_inches="tight")
+            plot_path = agent_folder / filename
+            fig.savefig(plot_path, dpi=300, bbox_inches="tight")
+            if fig._suptitle is not None:
+                fig._suptitle.remove()
+            fig.savefig(plot_path.with_suffix(".pdf"), dpi=300, bbox_inches="tight")
             plt.close(fig)
 
     if save:
