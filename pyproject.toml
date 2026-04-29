@@ -15,4 +15,3 @@ where = ["src"]
 ewfs-run = "ewfs.experiments.run:main"
 ewfs-evaluate = "ewfs.analysis.agent_evaluation:main"
 ewfs-plot-time-ordering = "ewfs.analysis.time_ordering_hardware:main"
-ewfs-plot-connectivity = "ewfs.analysis.plot_ibm_connectivity:main"

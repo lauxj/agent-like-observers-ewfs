@@ -40,4 +40,4 @@ pip install -e .
 ```
 
 After that, the same entrypoints are available as `ewfs-run`, `ewfs-evaluate`,
-`ewfs-plot-time-ordering`, and `ewfs-plot-connectivity`.
+and `ewfs-plot-time-ordering`.

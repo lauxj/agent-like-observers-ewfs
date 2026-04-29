@@ -14,3 +14,7 @@ results/
 
 # Keep macOS Finder metadata ignored even inside unignored data folders.
 **/.DS_Store
+
+# Local-only connectivity plotting work; not pushed until it is ready again.
+scripts/plot_ibm_connectivity.py
+src/ewfs/analysis/plot_ibm_connectivity.py
