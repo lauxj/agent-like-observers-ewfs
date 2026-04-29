@@ -5,6 +5,11 @@ __pycache__/
 
 # keep paperdata
 data/*
+
+!data/IBM_calibrations/
+data/IBM_calibrations/*
+!data/IBM_calibrations/ibm_marrakesh_calibrations_2026-04-07T22_56_28Z.csv
+
 !data/data_real_hardware/
 data/data_real_hardware/*
 !data/data_real_hardware/ibm_marrakesh_20260408_094008/

@@ -1,5 +1,27 @@
-""" 
-Plotting script for evaluation of the data and runs.
+"""
+Create evaluation plots from saved EWFS experiment runs.
+
+Inputs:
+- data/data_noiseless_simulation
+- data/data_fake_hardware
+- data/data_real_hardware
+- saved lf_violations/lf_violations.json files
+- optional accuracy-test result files
+
+Outputs:
+- PNG/PDF plots under results/plots/plots_agent_evaluation/<timestamp>
+- JSON sidecar metadata for generated plots
+
+By default, the script uses the latest configured runs. Specific runs can be
+selected with --noiseless-run, --fake-run, and --real-run.
+
+File map:
+- configuration constants
+- small plotting and JSON helpers
+- run selection / data loading
+- metric extraction and aggregation
+- plot builders
+- printed summaries and main()
 """
 
 import argparse
@@ -14,7 +36,7 @@ import numpy as np
 from matplotlib.lines import Line2D
 from matplotlib.patches import Patch
 
-
+# directories
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 DATA_DIR_REAL = PROJECT_ROOT / "data" / "data_real_hardware"
 DATA_DIR_NOISELESS = PROJECT_ROOT / "data" / "data_noiseless_simulation"
@@ -22,19 +44,25 @@ DATA_DIR_FAKE = PROJECT_ROOT / "data" / "data_fake_hardware"
 PLOTS_ROOT = PROJECT_ROOT / "results" / "plots" / "plots_agent_evaluation"
 
 # -----------------------------------------------------------------------------
-# Set number of runs that should be considered
-# takes the n-latest runs (so make sure the n-latest are from one backend and close to each other in time)
+# Configuration
+
+# Number of runs to aggregate per backend. This takes the n-latest runs, so make
+# sure those runs are from one backend and close together in time.
 EVALUATION_LAST_N = {
     "Noiseless": 10,
     "Fake hardware": 10,
     "Real hardware": 10,
 }
-# if paths are inserted here, they will be used instead of the above logic
+# If run folders are inserted here, they are used instead of EVALUATION_LAST_N.
 EVALUATION_RUN_PATHS = {
     "Noiseless": [],
     "Fake hardware": [],
     "Real hardware": [],
 }
+
+
+#-----------------------------------------------------------------------------
+# Constants and small helpers for plots
 
 IDEAL_COLOR = "#222222"
 THEORY_LINE_COLOR = "#C92A2A"
@@ -201,6 +229,9 @@ ACCURACY_METRIC_SPECS = {
 }
 
 
+# -----------------------------------------------------------------------------
+# Small plotting helpers
+
 def style_bar_axes(ax, title: str, ylabel: str):
     ax.set_ylabel(ylabel)
     ax.grid(axis="y", alpha=0.25)
@@ -319,6 +350,9 @@ def save_plot(fig, plot_path: Path, *, dpi: int = 300, bbox_inches: str = "tight
     fig.savefig(pdf_plot_path(plot_path), dpi=dpi, bbox_inches=bbox_inches)
     return plot_path
 
+
+# -----------------------------------------------------------------------------
+# Run selection and file loading
 
 def candidate_run_dirs(data_dir: Path, result_filename: str):
     if not data_dir.exists():
@@ -996,6 +1030,9 @@ def annotate_custom_bar_labels(ax, bars, values, errors, y_positions, *, vas=Non
         )
 
 
+# -----------------------------------------------------------------------------
+# Metric extraction from saved count dictionaries
+
 def extract_strategy_probabilities(counts):
     stats = {
         "0": {"shots": 0, "correct_bets": 0},
@@ -1163,6 +1200,9 @@ def load_lf_violations_for_run(run_dir: Path):
         raise FileNotFoundError(f"LF violations file not found: {lf_path.resolve()}")
     return load_json(lf_path)
 
+
+# -----------------------------------------------------------------------------
+# Aggregation and metadata builders
 
 def lf_correlator_series_from_saved_results(agent_lf_data):
     correlators = agent_lf_data["correlators"]
@@ -1420,6 +1460,9 @@ def build_output_dir() -> Path:
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     return PLOTS_ROOT / timestamp
 
+
+# -----------------------------------------------------------------------------
+# Accuracy-test extraction
 
 def parse_accuracy_test_agent_label(agent_label: str) -> tuple[str, str]:
     if agent_label.endswith(ACCURACY_TEST_SUFFIX_INIT0):
@@ -1769,6 +1812,9 @@ def build_payoff_value_summary(results) -> dict:
         "backends": backends,
     }
 
+
+# -----------------------------------------------------------------------------
+# Plot builders
 
 def plot_combined_memory_epsilon(memory_inaccuracy_summary, output_dir: Path, tracking_epsilon_max_summary: Optional[dict] = None) -> Path:
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -2907,6 +2953,9 @@ def plot_reflex_sa_m_accuracy(results, output_dir: Path) -> Path:
     return plot_accuracy_metric(results, output_dir, "reflex_sa_m_accuracy")
 
 
+# -----------------------------------------------------------------------------
+# Printed summaries and script entry point
+
 def print_accuracy_metric_summary(results, metric_key: str):
     spec = ACCURACY_METRIC_SPECS[metric_key]
     value_key = spec["value_key"]
@@ -2965,7 +3014,7 @@ def print_selection_summary(results):
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Create the Betting Agent strategy comparison plot."
+        description="Create EWFS evaluation plots from saved experiment runs."
     )
     parser.add_argument("--noiseless-run", type=str, default=None, help="Run folder name inside data/data_noiseless_simulation.")
     parser.add_argument("--fake-run", type=str, default=None, help="Run folder name inside data/data_fake_hardware.")
