@@ -1,0 +1,79 @@
+{
+  "kind": "lf_violations",
+  "source_file": "noiseless_simulation.json",
+  "source_path": "/Users/joshua/PycharmProjects/masters_thesis_project/data/data_noiseless_simulation/noiseless_simulation_20260408_095015/noiseless_simulation.json",
+  "agents": {
+    "Betting Agent": {
+      "S": 0.8242939590349678,
+      "correlators": {
+        "E11": -0.7088275093528615,
+        "E12": 0.7048754765960898,
+        "E21": -0.7080530233669042,
+        "E22": -0.7025379497191123
+      },
+      "correlator_shots": {
+        "E11": 25126,
+        "E12": 24654,
+        "E21": 25121,
+        "E22": 25099
+      },
+      "num_bitstrings": 24,
+      "total_shots": 100000,
+      "violation": true
+    },
+    "Guessing Agent": {
+      "S": 0.8255321487023841,
+      "correlators": {
+        "E11": -0.7077953132472501,
+        "E12": 0.7035855302516651,
+        "E21": -0.7062590043220746,
+        "E22": -0.7078923008813941
+      },
+      "correlator_shots": {
+        "E11": 25092,
+        "E12": 25073,
+        "E21": 24988,
+        "E22": 24847
+      },
+      "num_bitstrings": 24,
+      "total_shots": 100000,
+      "violation": true
+    },
+    "Reflex Agent": {
+      "S": 0.8226532644766054,
+      "correlators": {
+        "E11": -0.70773410035155,
+        "E12": 0.7057893071812718,
+        "E21": -0.6986700084893075,
+        "E22": -0.7104598484544762
+      },
+      "correlator_shots": {
+        "E11": 25032,
+        "E12": 25288,
+        "E21": 24737,
+        "E22": 24943
+      },
+      "num_bitstrings": 16,
+      "total_shots": 100000,
+      "violation": true
+    },
+    "Always 3/4 Agent": {
+      "S": 0.8297593762845334,
+      "correlators": {
+        "E11": -0.6996641612026228,
+        "E12": 0.7084534101825168,
+        "E21": -0.7100565606321955,
+        "E22": -0.7115852442671984
+      },
+      "correlator_shots": {
+        "E11": 25012,
+        "E12": 24984,
+        "E21": 24929,
+        "E22": 25075
+      },
+      "num_bitstrings": 24,
+      "total_shots": 100000,
+      "violation": true
+    }
+  }
+}
