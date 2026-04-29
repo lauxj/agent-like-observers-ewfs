@@ -69,7 +69,7 @@ def build_circuit_betting() -> QuantumCircuit:
 
 
     # Conditional gates
-    # Conditional block for setting A2 (Undo and measure system):
+    # Conditional block for setting y=2 (Undo and measure system):
     qc.barrier(qr_SA[0], qr_SB[0], qr_M1[0], qr_M2[0], qr_W0[0], qr_W1[0], qr_A_choice[0], qr_B_choice[0])
     with qc.if_test((c[0], 1)):
         qc.cx(qr_M2[0], qr_W1[0])
