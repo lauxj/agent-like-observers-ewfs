@@ -3,6 +3,8 @@
 __pycache__/
 *.py[cod]
 
+ewfs/time_ordering_hardware.py
+
 # keep paperdata
 data/*
 !data/data_real_hardware/
@@ -83,3 +85,4 @@ results/
 
 # Keep macOS Finder metadata ignored even inside unignored data folders.
 **/.DS_Store
+
