@@ -1,163 +1,223 @@
 """
 lf_violations.py
-Calculates LF violations
+(this function gets called from the main run.py script)
+Calculate LF violations from saved experiment counts
+
+    S = -E11 + E12 - E21 - E22 - 2
+
+The LF inequality is satisfied when S >= 0.
+
+The LF calculation uses the values saved to the classical register::
+
+    c[0] <- AC[0]  Alice setting choice x
+    c[1] <- BC[0]  Bob setting choice y
+    c[2] <- M1[0]  Alice outcome for x=1
+    c[3] <- SA[0]  Alice outcome for x=2
+    c[4] <- SB[0]  Bob outcome
+
 """
 
 import json
 from pathlib import Path
 
-def pm(bit):
-    # 0 -> +1, 1 -> -1
-    return 1 if bit == "0" else -1
+
+AGENT_NAMES = [
+    "Betting Agent",
+    "Guessing Agent",
+    "Reflex Agent",
+    "Always 3/4 Agent",
+]
 
 
-def load(path, agent="Betting Agent"):
-    with open(path, "r", encoding="utf-8") as f:
-        data = json.load(f)
-    return {k: int(v) for k, v in data["agents"][agent]["counts"].items()}
+def LF_violation_details(path, agent="Betting Agent"):
+    """Calculate the LF value S for one agent."""
+    # First load the raw measurement counts for one agent
+    counts = load_counts(path, agent)
 
+    # Calculate the four correlators needed in the LF expression.
+    # E11 means x=1, y=1; E12 means x=1, y=2; and so on
+    E11 = E_details(counts, x=1, y=1)
+    E12 = E_details(counts, x=1, y=2)
+    E21 = E_details(counts, x=2, y=1)
+    E22 = E_details(counts, x=2, y=2)
 
-def E_details(counts, A, B):
-    # A in {1,2}: choose A1 (c2) or A2 (c3)
-    # B in {1,2}: choose B1 (c1=0) or B2 (c1=1)
+    # LF expression used in the thesis. Positive S means a violation.
+    s_value = -E11["value"] + E12["value"] - E21["value"] - E22["value"] - 2
 
-    choice_c0 = "0" if A == 1 else "1"  # A_choice
-    choice_c1 = "0" if B == 1 else "1"  # B_choice
-
-    num = 0
-    den = 0
-
-    for s, n in counts.items():
-        if len(s) < 5:
-            raise ValueError(f"Expected ≥5-bit key, got {s!r}")
-
-        # Extract the LF-relevant bits (last five classical bits)
-        c4, c3, c2, c1, c0 = s[-5], s[-4], s[-3], s[-2], s[-1]
-
-        if c1 == choice_c1 and c0 == choice_c0:
-            den += n
-
-            A_bit = c2 if A == 1 else c3
-            B_bit = c4
-
-            num += n * pm(A_bit) * pm(B_bit)
-
-    if den == 0:
-        raise ValueError(f"No events with c1={choice_c1} and c0={choice_c0}")
-
+    # Store both the correlator values and how many shots contributed to each
+    # correlator, so the saved output can be checked later.
     return {
-        "value": num / den,
-        "shots": int(den),
+        "S": s_value,
+        "correlators": {
+            "E11": E11["value"],
+            "E12": E12["value"],
+            "E21": E21["value"],
+            "E22": E22["value"],
+        },
+        "correlator_shots": {
+            "E11": E11["shots"],
+            "E12": E12["shots"],
+            "E21": E21["shots"],
+            "E22": E22["shots"],
+        },
+        "num_bitstrings": len(counts),
+        "total_shots": int(sum(counts.values())),
+        "violation": bool(s_value > 0),
     }
 
 
-def E(counts, A, B):
-    return E_details(counts, A, B)["value"]
+def E_details(counts, x, y):
+    """Calculate one correlator E_xy.
+
+    Counts are saved by Qiskit as bitstring keys in the JSON file, for example
+    {"00101": 123}. Each key is one measured classical-register outcome, and
+    the value is how often that outcome occurred.
+
+    The last five bits of each measured bitstring are:
+
+        c4 c3 c2 c1 c0
+
+    c0 chooses Alice setting: 0 -> x=1, 1 -> x=2
+    c1 chooses Bob setting:   0 -> y=1, 1 -> y=2
+    c2 is Alice's x=1 outcome
+    c3 is Alice's x=2 outcome
+    c4 is Bob's outcome for either y=1 or y=2
+    """
+    # Translate the requested settings x/y into the stored choice bits c0/c1.
+    wanted_c0 = "0" if x == 1 else "1"
+    wanted_c1 = "0" if y == 1 else "1"
+
+    # numerator sums: shots * Alice_outcome * Bob_outcome
+    # denominator counts how many shots used this x/y setting pair.
+    numerator = 0
+    denominator = 0
+
+    for bitstring, shots in counts.items():
+        if len(bitstring) < 5:
+            raise ValueError(f"Expected at least a 5-bit key, got {bitstring!r}")
+
+        # Only the last five classical bits are relevant for LF.
+        c4 = bitstring[-5]  # Bob's outcome
+        c3 = bitstring[-4]  # Alice's outcome if x=2
+        c2 = bitstring[-3]  # Alice's outcome if x=1
+        c1 = bitstring[-2]  # Bob's setting choice y
+        c0 = bitstring[-1]  # Alice's setting choice x
+
+        # Keep only shots where the circuit selected the wanted x/y setting.
+        if c0 != wanted_c0 or c1 != wanted_c1:
+            continue
+
+        # Select Alice's relevant outcome bit for this x setting.
+        alice_bit = c2 if x == 1 else c3
+        bob_bit = c4
+
+        # Convert outcome bits to +/-1 and add Alice * Bob.
+        numerator += shots * bit_to_pm_one(alice_bit) * bit_to_pm_one(bob_bit)
+        denominator += shots
+
+    if denominator == 0:
+        raise ValueError(f"No shots found for x={x}, y={y}")
+
+    # E_xy is the average value of Alice_outcome * Bob_outcome.
+    return {
+        "value": numerator / denominator,
+        "shots": int(denominator),
+    }
+
+
+def E(counts, x, y):
+    """Return only the correlator value."""
+    # Convenience wrapper if only the number is needed.
+    return E_details(counts, x, y)["value"]
+
+
+def bit_to_pm_one(bit):
+    """Convert 0 -> +1 and 1 -> -1."""
+    return 1 if bit == "0" else -1
+
+
+def LF_violation(path, agent="Betting Agent"):
+    """Save LF results and return one agent's S value."""
+    # run.py calls this function when it wants to print one S value.
+    # The full LF JSON file is saved at the same time.
+    save_lf_violations_for_run(path)
+    return LF_violation_details(path, agent)["S"]
+
+
+def save_lf_violations_for_run(path, agent_names=None):
+    """Calculate LF violations for one run file and save them."""
+    if agent_names is None:
+        agent_names = AGENT_NAMES
+
+    run_path = Path(path)
+
+    # The input path points to one saved experiment file, for example:
+    # data/data_fake_hardware/<run_folder>/fake_hardware_noise_sim.json
+    # The LF inequality results are saved into the same run folder.
+    results = {
+        "kind": "lf_violations",
+        "source_file": run_path.name,
+        "source_path": str(run_path.resolve()),
+        "agents": {},
+    }
+
+    # Calculate LF data separately for each agent in the result file.
+    for agent_name in agent_names:
+        results["agents"][agent_name] = LF_violation_details(run_path, agent=agent_name)
+
+    # Save into: <same run folder>/lf_violations/lf_violations.json
+    output_dir = run_path.parent / "lf_violations"
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    output_path = output_dir / "lf_violations.json"
+    save_json(output_path, results)
+
+    print(f"Saved LF violations to: {output_path.resolve()}")
+    return results
+
+
+def load_counts(path, agent="Betting Agent"):
+    """Load one agent's counts from a saved run JSON file."""
+    with open(path, "r", encoding="utf-8") as f:
+        data = json.load(f)
+
+    # Saved run files have this structure:
+    # {
+    #   "agents": {
+    #     "Betting Agent": {
+    #       "counts": {"00101": 123, "10101": 87, ...}
+    #     },
+    #     ...
+    #   }
+    # }
+    # So this line selects exactly one agent's counts dictionary.
+    return {k: int(v) for k, v in data["agents"][agent]["counts"].items()}
+
+
+def save_json(path: Path, obj):
+    """Write formatted JSON."""
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(obj, f, indent=2)
+
+
+# Small helper names used by notebooks / older scripts.
+pm = bit_to_pm_one
+load = load_counts
 
 
 def correlator_details(counts):
-    """Return correlator values together with the exact shots used per setting."""
     return {
-        "E11": E_details(counts, 1, 1),
-        "E12": E_details(counts, 1, 2),
-        "E21": E_details(counts, 2, 1),
-        "E22": E_details(counts, 2, 2),
+        "E11": E_details(counts, x=1, y=1),
+        "E12": E_details(counts, x=1, y=2),
+        "E21": E_details(counts, x=2, y=1),
+        "E22": E_details(counts, x=2, y=2),
     }
 
 
 def correlators(counts):
-    """Return all four correlators entering the LF expression."""
-    details = correlator_details(counts)
-    return {key: value["value"] for key, value in details.items()}
-
+    return {key: value["value"] for key, value in correlator_details(counts).items()}
 
 
 def S(counts):
     corr = correlators(counts)
     return -corr["E11"] + corr["E12"] - corr["E21"] - corr["E22"] - 2
-
-
-def LF_violation_details(path, agent="Betting Agent"):
-    counts = load(path, agent=agent)
-    corr_details = correlator_details(counts)
-    corr = {key: value["value"] for key, value in corr_details.items()}
-    corr_shots = {key: value["shots"] for key, value in corr_details.items()}
-    s_value = -corr["E11"] + corr["E12"] - corr["E21"] - corr["E22"] - 2
-    total_shots = int(sum(counts.values()))
-    return {
-        "S": s_value,
-        "correlators": corr,
-        "correlator_shots": corr_shots,
-        "num_bitstrings": len(counts),
-        "total_shots": total_shots,
-        "violation": bool(s_value > 0),
-    }
-
-
-
-def LF_violation(path, agent="Betting Agent"):
-    # Ensure LF results are saved for this run
-    save_lf_violations_for_run(path)
-
-    # Return the S value for the requested agent
-    return LF_violation_details(path, agent=agent)["S"]
-
-
-def save_json(path: Path, obj):
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(obj, f, indent=2)
-
-
-
-def save_lf_violations_for_run(path, agent_names=None):
-    """Compute LF violations for one run file and save them into the same run folder."""
-    if agent_names is None:
-        agent_names = ["Betting Agent", "Guessing Agent", "Reflex Agent", "Always 3/4 Agent"]
-
-    run_path = Path(path)
-    results = {
-        "kind": "lf_violations",
-        "source_file": str(run_path.name),
-        "source_path": str(run_path.resolve()),
-        "agents": {},
-    }
-
-    for agent in agent_names:
-        results["agents"][agent] = LF_violation_details(str(run_path), agent=agent)
-
-    # Create folder inside the run directory to store LF results
-    out_dir = run_path.parent / "lf_violations"
-    out_dir.mkdir(parents=True, exist_ok=True)
-
-    out_path = out_dir / "lf_violations.json"
-    save_json(out_path, results)
-
-    print(f"Saved LF violations to: {out_path.resolve()}")
-    return results
-
-
-if __name__ == "__main__":
-
-    # For specific runs / Testing:
-     root = Path(__file__).resolve().parents[1]  # project root (one level above ewfs/)
-
-     # Noiseless simulation test
-     path1 = root / "INSERT PATH HERE FOR TESTING"
-     print("\nNoiseless simulation:")
-     results1 = save_lf_violations_for_run(path1)
-     for agent, values in results1["agents"].items():
-         print(agent, "S =", values["S"])
-
-     # fake_hardware test
-     print("fake hardware simulation:")
-     path2 = root / "INSERT PATH HERE FOR TESTING"
-     results2 = save_lf_violations_for_run(path2)
-     for agent, values in results2["agents"].items():
-         print(agent, "S =", values["S"])
-
-     # real hardware
-     print("\nReal hardware:")
-     path3 = root / "INSERT PATH HERE FOR TESTING"
-     results3 = save_lf_violations_for_run(path3)
-     for agent, values in results3["agents"].items():
-         print(agent, "S =", values["S"])

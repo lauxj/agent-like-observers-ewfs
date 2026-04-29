@@ -1,63 +1,45 @@
 """
-noiseless_simulation.py:
-Performs noiseless simulation on noiseless AerSimulator from qiskit_aer.
+noiseless_simulation.py
+Runs the agent circuits on a noiseless Qiskit Aer simulator.
 """
 
+import json
+import re
+from datetime import datetime
+from pathlib import Path
 import matplotlib.pyplot as plt
 from qiskit_aer import AerSimulator
-from pathlib import Path
-import json
-from datetime import datetime
+# import agents from agents.py:
+from agents import AGENTS
 
-try:
-    from ewfs.agents import AGENTS
-except ModuleNotFoundError:
-    from agents import AGENTS
-
-# Simulator:
-sim = AerSimulator()
-
-
-# Project root and base output folders
-project_root = Path(__file__).resolve().parent.parent
-
-# Where to save noiseless simulation raw data
-DATA_DIR = project_root / "data" / "data_noiseless_simulation"
-DATA_DIR.mkdir(parents=True, exist_ok=True)
-
-# Where to save noiseless circuit plots
-RESULTS_DIR = project_root / "results" / "plots" / "plots_noiseless_simulation"
-RESULTS_DIR.mkdir(parents=True, exist_ok=True)
+# define directories
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+DATA_DIR = PROJECT_ROOT / "data" / "data_noiseless_simulation"
+PLOTS_DIR = PROJECT_ROOT / "results" / "plots" / "plots_noiseless_simulation"
+NOISELESS_PLOT_FOLD = 18
+NOISELESS_PLOT_FONTSIZE = 16
+NOISELESS_PLOT_SUBFONTSIZE = 12
 
 
-def safe_label(label: str) -> str:
-    return "".join(ch if ch.isalnum() or ch in {"-", "_"} else "_" for ch in label).strip("_")
-
-
-def run_noiseless_simulation(
-    shots=10000,
-    save=True,
-    make_plots=True,
-    agent_builders=None,
-    folder_ts=None,
-    result_filename="noiseless_simulation.json",
-    plots_subdir="circuit_plots",
-):
-    """Run noiseless Aer simulations for all agent circuits."""
+def run_noiseless_simulation(shots=10000, save=True, make_plots=True, agent_builders=None, folder_ts=None, result_filename="noiseless_simulation.json", plots_subdir="circuit_plots", ):
+    """Run the selected agent circuits on a noiseless simulator."""
 
     print("\n=== Noiseless simulation ===")
     print(f"Shots: {shots}")
 
     timestamp = folder_ts or datetime.now().strftime("%Y%m%d_%H%M%S")
-    run_folder_name = f"noiseless_simulation_{timestamp}"
+    run_name = f"noiseless_simulation_{timestamp}"
 
-    data_run_dir = DATA_DIR / run_folder_name
-    data_run_dir.mkdir(parents=True, exist_ok=True)
-
-    plots_run_dir = RESULTS_DIR / run_folder_name
-    plots_dir = plots_run_dir / plots_subdir
+    # Use one timestamped folder for the data and optional circuit plots.
+    data_dir = DATA_DIR / run_name
+    plots_dir = PLOTS_DIR / run_name / plots_subdir
+    data_dir.mkdir(parents=True, exist_ok=True)
     if make_plots:
         plots_dir.mkdir(parents=True, exist_ok=True)
+
+    # AerSimulator without a noise model gives the ideal/noiseless result.
+    simulator = AerSimulator()
+    builders = agent_builders or AGENTS
 
     run_data = {
         "kind": "noiseless_simulation",
@@ -66,52 +48,90 @@ def run_noiseless_simulation(
         "agents": {},
     }
 
-    selected_agents = list(agent_builders) if agent_builders is not None else AGENTS
-
-    for name, build_fn in selected_agents:
-        qc = build_fn()
-        result = sim.run(qc, shots=shots).result()
+    for agent_name, build_circuit in builders:
+        qc = build_circuit()
+        result = simulator.run(qc, shots=shots).result()
         counts = result.get_counts()
 
-        # Qiskit counts are already JSON-friendly in most cases, but ensure ints.
-        counts_json = {str(k): int(v) for k, v in counts.items()}
-
-        print(f"  {name}: done")
-
-        run_data["agents"][name] = {
-            "counts": counts_json,
+        # Save the bitstring counts in a JSON-friendly form.
+        run_data["agents"][agent_name] = {
+            "counts": {str(key): int(value) for key, value in counts.items()},
         }
 
         if make_plots:
-            safe_name = safe_label(name)
-            agent_folder = plots_dir / safe_name
-            agent_folder.mkdir(parents=True, exist_ok=True)
-            fig = qc.draw(output="mpl", fold=-1)
-            fig.suptitle(f"{name} – Quantum Circuit", fontsize=14)
-            filename = f"{safe_name}_circuit.png"
-            plot_path = agent_folder / filename
-            fig.savefig(plot_path, dpi=300, bbox_inches="tight")
-            if fig._suptitle is not None:
-                fig._suptitle.remove()
-            fig.savefig(plot_path.with_suffix(".pdf"), dpi=300, bbox_inches="tight")
-            plt.close(fig)
+            save_circuit_plot(qc, agent_name, plots_dir)
+
+        print(f"  {agent_name}: done")
 
     if save:
-        out_path = data_run_dir / result_filename
-        with open(out_path, "w", encoding="utf-8") as f:
+        output_file = data_dir / result_filename
+        with open(output_file, "w", encoding="utf-8") as f:
             json.dump(run_data, f, indent=2, sort_keys=True)
 
-        print(f"Saved data → {out_path}")
+        print(f"Saved data to: {output_file}")
         if make_plots:
-            print(f"Saved circuit plots → {plots_dir}")
+            print(f"Saved circuit plots to: {plots_dir}")
 
     return run_data
 
 
-# -----------------------------------------------------------------------------
+def safe_label(label: str) -> str:
+    """Make a label safe to use as a file or folder name."""
+    return "".join(ch if ch.isalnum() or ch in {"-", "_"} else "_" for ch in label).strip("_")
 
-# uncomment for testing or running
+
+def save_circuit_plot(qc, agent_name, plots_dir):
+    """Save one circuit diagram as PNG and PDF."""
+    safe_name = safe_label(agent_name)
+    agent_dir = plots_dir / safe_name
+    agent_dir.mkdir(parents=True, exist_ok=True)
+
+    plot_qc = qc.copy()
+    plot_qc.global_phase = 0
+
+    # Qiskit's matplotlib drawer returns a figure that we can save directly.
+    fig = plot_qc.draw(
+        output="mpl",
+        fold=NOISELESS_PLOT_FOLD,
+        scale=1.2,
+        style={
+            "fontsize": NOISELESS_PLOT_FONTSIZE,
+            "subfontsize": NOISELESS_PLOT_SUBFONTSIZE,
+        },
+    )
+    clean_circuit_plot_labels(fig)
+    fig.suptitle(f"{agent_name} - Quantum Circuit", fontsize=20)
+
+    png_path = agent_dir / f"{safe_name}_circuit.png"
+    fig.savefig(png_path, dpi=300, bbox_inches="tight")
+
+    if fig._suptitle is not None:
+        fig._suptitle.remove()
+    fig.savefig(png_path.with_suffix(".pdf"), dpi=300, bbox_inches="tight")
+    plt.close(fig)
+
+
+def clean_circuit_plot_labels(fig):
+    """Make Qiskit's plot labels easier to read in the thesis."""
+    for ax in fig.axes:
+        for text in ax.texts:
+            label = text.get_text()
+
+            # Register names sometimes appear as SB_0, SA_0, etc.
+            label = re.sub(r"_\{0\}", "", label)
+            label = re.sub(r"_0(?=\}?\\?$|\$|$)", "", label)
+
+            if label.startswith("c_") and "=0x" in label:
+                bit_name, value = label.split("=0x")
+                bit_index = bit_name.replace("c_", "")
+                label = f"c[{bit_index}] = {int(value, 16)}"
+                text.set_fontsize(20)
+            elif label.isdigit():
+                text.set_fontsize(20)
+
+            text.set_text(label)
+
 
 if __name__ == "__main__":
-    # Change shots if needed.
+    # can be run using this file, but usually is called from the main run script
     run_noiseless_simulation(shots=10_000, save=True, make_plots=True)

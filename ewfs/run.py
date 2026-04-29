@@ -4,36 +4,29 @@ Runner file to control all possible runs and plots for:
 – Noiseless simulation
 – Fake hardware simulation
 – Real hardware run
+
+NOTE: IBM API token must be installed locally to run the real hardware part of this script
+run this in terminal to save your IBM API token (replace YOUR_IBM_API_KEY with the actual key):
+python -c "from qiskit_ibm_runtime import QiskitRuntimeService; QiskitRuntimeService.save_account(channel='ibm_quantum_platform', token='YOUR_IBM_API_KEY', set_as_default=True, overwrite=True)"
+check that it saved:
+python -c "from qiskit_ibm_runtime import QiskitRuntimeService; print(QiskitRuntimeService.saved_accounts())" 
 """
 
 import argparse
 from datetime import datetime
-
-try:
-    from .noiseless_simulation import run_noiseless_simulation
-    from .fake_hardware import run_fake_hardware_for_backend, prepare_fake_hardware_run
-    from .real_hardware import (
-        run_real_hardware_for_backend,
-        run_grouped_real_hardware_for_backend,
-        prepare_real_hardware_run,
-    )
-    from .agents import AGENTS
-    from .accuracy_test_circuits import ACCURACY_TEST_BUILDERS
-    from .lf_violations import LF_violation
-    from .time_ordering_hardware import save_visualizations_for_run as run_time_ordering_hardware
-except ImportError:
-    from noiseless_simulation import run_noiseless_simulation
-    from fake_hardware import run_fake_hardware_for_backend, prepare_fake_hardware_run
-    from real_hardware import (
-        run_real_hardware_for_backend,
-        run_grouped_real_hardware_for_backend,
-        prepare_real_hardware_run,
-    )
-    from agents import AGENTS
-    from accuracy_test_circuits import ACCURACY_TEST_BUILDERS
-    from lf_violations import LF_violation
-    from time_ordering_hardware import save_visualizations_for_run as run_time_ordering_hardware
 from pathlib import Path
+
+from accuracy_test_circuits import ACCURACY_TEST_BUILDERS
+from agents import AGENTS
+from fake_hardware import prepare_fake_hardware_run, run_fake_hardware_for_backend
+from lf_violations import LF_violation
+from noiseless_simulation import run_noiseless_simulation
+from real_hardware import (
+    prepare_real_hardware_run,
+    run_grouped_real_hardware_for_backend,
+    run_real_hardware_for_backend,
+)
+from time_ordering_hardware import save_visualizations_for_run as run_time_ordering_hardware
 
 
 # -----------------------------------------------------------------------------
@@ -57,7 +50,7 @@ FAKE_HARDWARE_SHOTS = 10_000
 
 # Real hardware
 DO_REAL_HARDWARE = True
-REAL_HARDWARE_SHOTS = 10_000
+REAL_HARDWARE_SHOTS = 1_000
 
 # Accuracy-test circuits
 INCLUDE_ACCURACY_TEST_CIRCUITS = True
@@ -80,6 +73,8 @@ REAL_BACKENDS = {
 CALCULATE_LF_VIOLATIONS = True
 LF_AGENTS = ["Betting Agent", "Guessing Agent", "Reflex Agent", "Always 3/4 Agent"]
 
+# -----------------------------------------------------------------------------
+# Helpers for LF violation calculation from saved data files
 
 def get_latest_noiseless_file():
     """Return the newest noiseless simulation JSON file."""
@@ -134,6 +129,9 @@ def get_real_backend(service, backend_name: str):
 
 def parse_args():
     """Parse runner CLI overrides."""
+    # These options are only used when this file is started from the terminal.
+    # They let us temporarily override a few settings without editing the
+    # configuration constants above.
     parser = argparse.ArgumentParser(description="Run EWFS experiments and optional accuracy-test circuits.")
     parser.add_argument(
         "--include-accuracy-tests",
@@ -159,6 +157,8 @@ def parse_args():
         default=None,
         help="Override the accuracy-test circuit shot count for all enabled run modes.",
     )
+    # If neither --include-accuracy-tests nor --exclude-accuracy-tests is given,
+    # use the value from INCLUDE_ACCURACY_TEST_CIRCUITS above.
     parser.set_defaults(include_accuracy_tests=INCLUDE_ACCURACY_TEST_CIRCUITS)
     return parser.parse_args()
 
@@ -342,6 +342,8 @@ def run_all(
 
 
 if __name__ == "__main__":
+    # Read optional terminal arguments, then pass them into the main runner.
+    # Example: python ewfs/run.py --shots-main 5000 --exclude-accuracy-tests
     args = parse_args()
     run_all(
         include_accuracy_tests=args.include_accuracy_tests,

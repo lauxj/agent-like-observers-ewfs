@@ -31,14 +31,14 @@ def _build_circuit_reflex_accuracy_test(init_bit: int) -> QuantumCircuit:
     qr_SA = QuantumRegister(1, "SA")
     qr_M = QuantumRegister(1, "M")
     qr_R = QuantumRegister(1, "R")
-    qr_A_choice = QuantumRegister(1, "Achoice")
-    qr_B_choice = QuantumRegister(1, "Bchoice")
+    qr_AC = QuantumRegister(1, "AC")
+    qr_BC = QuantumRegister(1, "BC")
 
     # Classical register:
     c = ClassicalRegister(6, "c")
 
     qc = QuantumCircuit(
-        qr_SB, qr_SA, qr_M, qr_R, qr_A_choice, qr_B_choice,
+        qr_SB, qr_SA, qr_M, qr_R, qr_AC, qr_BC,
         c,
         name=f"reflex_agent_accuracy_test_init{init_bit}",
     )
@@ -48,23 +48,23 @@ def _build_circuit_reflex_accuracy_test(init_bit: int) -> QuantumCircuit:
     qc.cx(qr_SA[0], qr_SB[0])
 
     # Fixed memory preparation:
-    qc.barrier(qr_SB, qr_SA, qr_M, qr_R, qr_A_choice, qr_B_choice)
+    qc.barrier(qr_SB, qr_SA, qr_M, qr_R, qr_AC, qr_BC)
     if init_bit == 1:
         qc.x(qr_M[0])
 
     # Charlie's action:
-    qc.barrier(qr_SB, qr_SA, qr_M, qr_R, qr_A_choice, qr_B_choice)
+    qc.barrier(qr_SB, qr_SA, qr_M, qr_R, qr_AC, qr_BC)
     qc.cx(qr_M[0], qr_R[0])
 
     # Alice's and Bob's choice (x and y):
-    qc.barrier(qr_SB, qr_SA, qr_M, qr_R, qr_A_choice, qr_B_choice)
-    qc.h(qr_B_choice[0])
-    qc.h(qr_A_choice[0])
-    qc.measure(qr_A_choice[0], c[0])
-    qc.measure(qr_B_choice[0], c[1])
+    qc.barrier(qr_SB, qr_SA, qr_M, qr_R, qr_AC, qr_BC)
+    qc.h(qr_BC[0])
+    qc.h(qr_AC[0])
+    qc.measure(qr_AC[0], c[0])
+    qc.measure(qr_BC[0], c[1])
 
     # Bob's setting B1:
-    qc.barrier(qr_SB, qr_SA, qr_M, qr_R, qr_A_choice, qr_B_choice)
+    qc.barrier(qr_SB, qr_SA, qr_M, qr_R, qr_AC, qr_BC)
     with qc.if_test((c[1], 0)):
         qc.ry(beta1, qr_SB[0])
     # Bob's setting B2:
@@ -72,7 +72,7 @@ def _build_circuit_reflex_accuracy_test(init_bit: int) -> QuantumCircuit:
         qc.ry(beta2, qr_SB[0])
 
     # Alice's and Bob's measurements:
-    qc.barrier(qr_SB, qr_SA, qr_M, qr_R, qr_A_choice, qr_B_choice)
+    qc.barrier(qr_SB, qr_SA, qr_M, qr_R, qr_AC, qr_BC)
     qc.delay(REFLEX_DELAY, qr_M[0], unit="dt")
     qc.measure(qr_M[0], c[2])
     qc.measure(qr_SA[0], c[3])
@@ -99,14 +99,14 @@ def _build_circuit_guessing_accuracy_test(init_bit) -> QuantumCircuit:
     qr_M1 = QuantumRegister(1, "M1")
     qr_M2 = QuantumRegister(1, "M2")
     qr_G = QuantumRegister(1, "G")
-    qr_A_choice = QuantumRegister(1, "Achoice")
-    qr_B_choice = QuantumRegister(1, "Bchoice")
+    qr_AC = QuantumRegister(1, "AC")
+    qr_BC = QuantumRegister(1, "BC")
 
     # Classical register:
     c = ClassicalRegister(7, "c")
 
     qc = QuantumCircuit(
-        qr_SB, qr_SA, qr_M1, qr_M2, qr_G, qr_A_choice, qr_B_choice,
+        qr_SB, qr_SA, qr_M1, qr_M2, qr_G, qr_AC, qr_BC,
         c,
         name=f"guessing_agent_accuracy_test_init{init_bit}",
     )
@@ -116,28 +116,28 @@ def _build_circuit_guessing_accuracy_test(init_bit) -> QuantumCircuit:
     qc.cx(qr_SA[0], qr_SB[0])
 
     # Fixed memory preparation:
-    qc.barrier(qr_SB, qr_SA, qr_M1, qr_M2, qr_G, qr_A_choice, qr_B_choice)
+    qc.barrier(qr_SB, qr_SA, qr_M1, qr_M2, qr_G, qr_AC, qr_BC)
     if init_bit == 1:
         qc.x(qr_M1[0])
 
     # Charlie's guess:
-    qc.barrier(qr_SB, qr_SA, qr_M1, qr_M2, qr_G, qr_A_choice, qr_B_choice)
+    qc.barrier(qr_SB, qr_SA, qr_M1, qr_M2, qr_G, qr_AC, qr_BC)
     qc.cx(qr_M1[0], qr_G[0])
 
     # Charlie's second measurement in rotated basis:
-    qc.barrier(qr_SB, qr_SA, qr_M1, qr_M2, qr_G, qr_A_choice, qr_B_choice)
+    qc.barrier(qr_SB, qr_SA, qr_M1, qr_M2, qr_G, qr_AC, qr_BC)
     qc.ry(np.pi / 3, qr_SA[0])
     qc.cx(qr_SA[0], qr_M2[0])
 
     # Alice's and Bob's choice (x and y):
-    qc.barrier(qr_SB, qr_SA, qr_M1, qr_M2, qr_G, qr_A_choice, qr_B_choice)
-    qc.h(qr_B_choice[0])
-    qc.h(qr_A_choice[0])
-    qc.measure(qr_A_choice[0], c[0])
-    qc.measure(qr_B_choice[0], c[1])
+    qc.barrier(qr_SB, qr_SA, qr_M1, qr_M2, qr_G, qr_AC, qr_BC)
+    qc.h(qr_BC[0])
+    qc.h(qr_AC[0])
+    qc.measure(qr_AC[0], c[0])
+    qc.measure(qr_BC[0], c[1])
 
     # Bob's setting B1:
-    qc.barrier(qr_SB, qr_SA, qr_M1, qr_M2, qr_G, qr_A_choice, qr_B_choice)
+    qc.barrier(qr_SB, qr_SA, qr_M1, qr_M2, qr_G, qr_AC, qr_BC)
     with qc.if_test((c[1], 0)):
         qc.ry(beta1, qr_SB[0])
     # Bob's setting B2:
@@ -145,7 +145,7 @@ def _build_circuit_guessing_accuracy_test(init_bit) -> QuantumCircuit:
         qc.ry(beta2, qr_SB[0])
 
     # Alice's and Bob's measurements:
-    qc.barrier(qr_SB, qr_SA, qr_M1, qr_M2, qr_G, qr_A_choice, qr_B_choice)
+    qc.barrier(qr_SB, qr_SA, qr_M1, qr_M2, qr_G, qr_AC, qr_BC)
     qc.delay(GUESSING_DELAY, qr_M1[0], unit="dt")
     qc.measure(qr_M1[0], c[2])
     qc.measure(qr_SA[0], c[3])
@@ -174,14 +174,14 @@ def _build_circuit_betting_accuracy_test(init_bit) -> QuantumCircuit:
     qr_M2 = QuantumRegister(1, "M2")
     qr_W0 = QuantumRegister(1, "W0")
     qr_W1 = QuantumRegister(1, "W1")
-    qr_A_choice = QuantumRegister(1, "Achoice")
-    qr_B_choice = QuantumRegister(1, "Bchoice")
+    qr_AC = QuantumRegister(1, "AC")
+    qr_BC = QuantumRegister(1, "BC")
 
     # Classical register:
     c = ClassicalRegister(8, "c")
 
     qc = QuantumCircuit(
-        qr_SB, qr_SA, qr_M1, qr_M2, qr_W0, qr_W1, qr_A_choice, qr_B_choice,
+        qr_SB, qr_SA, qr_M1, qr_M2, qr_W0, qr_W1, qr_AC, qr_BC,
         c,
         name=f"betting_agent_accuracy_test_init{init_bit}",
     )
@@ -192,32 +192,32 @@ def _build_circuit_betting_accuracy_test(init_bit) -> QuantumCircuit:
     qc.x(qr_W0[0])
 
     # Fixed memory preparation:
-    qc.barrier(qr_SB, qr_SA, qr_M1, qr_M2, qr_W0, qr_W1, qr_A_choice, qr_B_choice)
+    qc.barrier(qr_SB, qr_SA, qr_M1, qr_M2, qr_W0, qr_W1, qr_AC, qr_BC)
     if init_bit == 1:
         qc.x(qr_M1[0])
 
     # Charlie's first wallet update:
-    qc.barrier(qr_SB, qr_SA, qr_M1, qr_M2, qr_W0, qr_W1, qr_A_choice, qr_B_choice)
+    qc.barrier(qr_SB, qr_SA, qr_M1, qr_M2, qr_W0, qr_W1, qr_AC, qr_BC)
     qc.cx(qr_M1[0], qr_W0[0])
 
     # Charlie's second measurement in rotated basis:
-    qc.barrier(qr_SB, qr_SA, qr_M1, qr_M2, qr_W0, qr_W1, qr_A_choice, qr_B_choice)
+    qc.barrier(qr_SB, qr_SA, qr_M1, qr_M2, qr_W0, qr_W1, qr_AC, qr_BC)
     qc.ry(np.pi / 3, qr_SA[0])
     qc.cx(qr_SA[0], qr_M2[0])
 
     # Charlie's second wallet update:
-    qc.barrier(qr_SB, qr_SA, qr_M1, qr_M2, qr_W0, qr_W1, qr_A_choice, qr_B_choice)
+    qc.barrier(qr_SB, qr_SA, qr_M1, qr_M2, qr_W0, qr_W1, qr_AC, qr_BC)
     qc.cx(qr_M2[0], qr_W1[0])
 
     # Alice's and Bob's choice (x and y):
-    qc.barrier(qr_SB, qr_SA, qr_M1, qr_M2, qr_W0, qr_W1, qr_A_choice, qr_B_choice)
-    qc.h(qr_A_choice[0])
-    qc.measure(qr_A_choice[0], c[0])
-    qc.h(qr_B_choice[0])
-    qc.measure(qr_B_choice[0], c[1])
+    qc.barrier(qr_SB, qr_SA, qr_M1, qr_M2, qr_W0, qr_W1, qr_AC, qr_BC)
+    qc.h(qr_AC[0])
+    qc.measure(qr_AC[0], c[0])
+    qc.h(qr_BC[0])
+    qc.measure(qr_BC[0], c[1])
 
     # Bob's setting B1:
-    qc.barrier(qr_SB, qr_SA, qr_M1, qr_M2, qr_W0, qr_W1, qr_A_choice, qr_B_choice)
+    qc.barrier(qr_SB, qr_SA, qr_M1, qr_M2, qr_W0, qr_W1, qr_AC, qr_BC)
     with qc.if_test((c[1], 0)):
         qc.ry(beta1, qr_SB[0])
     # Bob's setting B2:
@@ -225,7 +225,7 @@ def _build_circuit_betting_accuracy_test(init_bit) -> QuantumCircuit:
         qc.ry(beta2, qr_SB[0])
 
     # Alice's and Bob's measurements:
-    qc.barrier(qr_SB, qr_SA, qr_M1, qr_M2, qr_W0, qr_W1, qr_A_choice, qr_B_choice)
+    qc.barrier(qr_SB, qr_SA, qr_M1, qr_M2, qr_W0, qr_W1, qr_AC, qr_BC)
     qc.delay(BETTING_DELAY, qr_M1[0], unit="dt")
     qc.measure(qr_M1[0], c[2])
     qc.measure(qr_SA[0], c[3])
@@ -257,14 +257,14 @@ def _build_circuit_always_large_accuracy_test(init_bit) -> QuantumCircuit:
     qr_M2 = QuantumRegister(1, "M2")
     qr_W0 = QuantumRegister(1, "W0")
     qr_W1 = QuantumRegister(1, "W1")
-    qr_A_choice = QuantumRegister(1, "Achoice")
-    qr_B_choice = QuantumRegister(1, "Bchoice")
+    qr_AC = QuantumRegister(1, "AC")
+    qr_BC = QuantumRegister(1, "BC")
 
     # Classical register:
     c = ClassicalRegister(8, "c")
 
     qc = QuantumCircuit(
-        qr_SB, qr_SA, qr_M1, qr_M2, qr_W0, qr_W1, qr_A_choice, qr_B_choice,
+        qr_SB, qr_SA, qr_M1, qr_M2, qr_W0, qr_W1, qr_AC, qr_BC,
         c,
         name=f"always_large_agent_accuracy_test_init{init_bit}",
     )
@@ -275,32 +275,32 @@ def _build_circuit_always_large_accuracy_test(init_bit) -> QuantumCircuit:
     qc.x(qr_W0[0])
 
     # Fixed memory preparation:
-    qc.barrier(qr_SB, qr_SA, qr_M1, qr_M2, qr_W0, qr_W1, qr_A_choice, qr_B_choice)
+    qc.barrier(qr_SB, qr_SA, qr_M1, qr_M2, qr_W0, qr_W1, qr_AC, qr_BC)
     if init_bit == 1:
         qc.x(qr_M1[0])
 
     # Charlie always places the 3/4 bet:
-    qc.barrier(qr_SB, qr_SA, qr_M1, qr_M2, qr_W0, qr_W1, qr_A_choice, qr_B_choice)
+    qc.barrier(qr_SB, qr_SA, qr_M1, qr_M2, qr_W0, qr_W1, qr_AC, qr_BC)
     qc.x(qr_W0[0])
 
     # Charlie's second measurement in rotated basis:
-    qc.barrier(qr_SB, qr_SA, qr_M1, qr_M2, qr_W0, qr_W1, qr_A_choice, qr_B_choice)
+    qc.barrier(qr_SB, qr_SA, qr_M1, qr_M2, qr_W0, qr_W1, qr_AC, qr_BC)
     qc.ry(np.pi / 3, qr_SA[0])
     qc.cx(qr_SA[0], qr_M2[0])
 
     # Charlie's second wallet update:
-    qc.barrier(qr_SB, qr_SA, qr_M1, qr_M2, qr_W0, qr_W1, qr_A_choice, qr_B_choice)
+    qc.barrier(qr_SB, qr_SA, qr_M1, qr_M2, qr_W0, qr_W1, qr_AC, qr_BC)
     qc.cx(qr_M2[0], qr_W1[0])
 
     # Alice's and Bob's choice (x and y):
-    qc.barrier(qr_SB, qr_SA, qr_M1, qr_M2, qr_W0, qr_W1, qr_A_choice, qr_B_choice)
-    qc.h(qr_A_choice[0])
-    qc.measure(qr_A_choice[0], c[0])
-    qc.h(qr_B_choice[0])
-    qc.measure(qr_B_choice[0], c[1])
+    qc.barrier(qr_SB, qr_SA, qr_M1, qr_M2, qr_W0, qr_W1, qr_AC, qr_BC)
+    qc.h(qr_AC[0])
+    qc.measure(qr_AC[0], c[0])
+    qc.h(qr_BC[0])
+    qc.measure(qr_BC[0], c[1])
 
     # Bob's setting B1:
-    qc.barrier(qr_SB, qr_SA, qr_M1, qr_M2, qr_W0, qr_W1, qr_A_choice, qr_B_choice)
+    qc.barrier(qr_SB, qr_SA, qr_M1, qr_M2, qr_W0, qr_W1, qr_AC, qr_BC)
     with qc.if_test((c[1], 0)):
         qc.ry(beta1, qr_SB[0])
     # Bob's setting B2:
@@ -308,7 +308,7 @@ def _build_circuit_always_large_accuracy_test(init_bit) -> QuantumCircuit:
         qc.ry(beta2, qr_SB[0])
 
     # Alice's and Bob's measurements:
-    qc.barrier(qr_SB, qr_SA, qr_M1, qr_M2, qr_W0, qr_W1, qr_A_choice, qr_B_choice)
+    qc.barrier(qr_SB, qr_SA, qr_M1, qr_M2, qr_W0, qr_W1, qr_AC, qr_BC)
     qc.delay(ALWAYS_LARGE_DELAY, qr_M1[0], unit="dt")
     qc.measure(qr_M1[0], c[2])
     qc.measure(qr_SA[0], c[3])

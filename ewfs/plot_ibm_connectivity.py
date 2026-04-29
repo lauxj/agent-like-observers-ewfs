@@ -203,7 +203,7 @@ def betting_edges_from_layout(layout: list[int]) -> list[tuple[int, int]]:
 
 
 def agent_role_for_name(qubit_name: str) -> str:
-    if qubit_name in {"Achoice", "Bchoice"}:
+    if qubit_name in {"AC", "BC"}:
         return "choice"
     if qubit_name in {"SB", "SA"}:
         return "core"
@@ -232,7 +232,7 @@ def agent_plot_data(agent_name: str, layout: list[int]) -> dict[str, object]:
     ]
     red_edges = [edge for edge in highlighted_edges if edge not in green_edges]
     labels = {
-        physical: ("" if logical_names[index] in {"Achoice", "Bchoice"} else logical_names[index])
+        physical: ("" if logical_names[index] in {"AC", "BC"} else logical_names[index])
         for index, physical in enumerate(layout)
     }
     node_groups = {
@@ -365,8 +365,8 @@ def compact_agent_positions(
         gap = 30.0
 
     logical_names = plot_data["logical_names"]
-    left_candidates = [node for node in isolated_nodes if logical_names[node] == "Achoice"]
-    right_candidates = [node for node in isolated_nodes if logical_names[node] == "Bchoice"]
+    left_candidates = [node for node in isolated_nodes if logical_names[node] == "AC"]
+    right_candidates = [node for node in isolated_nodes if logical_names[node] == "BC"]
     remaining_isolates = [
         node
         for node in isolated_nodes
