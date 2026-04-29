@@ -1,0 +1,79 @@
+{
+  "kind": "lf_violations",
+  "source_file": "real_hardware_run.json",
+  "source_path": "/Users/joshua/PycharmProjects/masters_thesis_project/data/data_real_hardware/ibm_marrakesh_20260408_100516/real_hardware_run.json",
+  "agents": {
+    "Betting Agent": {
+      "S": 0.30854944442028254,
+      "correlators": {
+        "E11": -0.6120240480961924,
+        "E12": 0.618308132407029,
+        "E21": -0.5340996168582376,
+        "E22": -0.5441176470588235
+      },
+      "correlator_shots": {
+        "E11": 2495,
+        "E12": 2447,
+        "E21": 2610,
+        "E22": 2448
+      },
+      "num_bitstrings": 198,
+      "total_shots": 10000,
+      "violation": true
+    },
+    "Guessing Agent": {
+      "S": 0.4393514526926037,
+      "correlators": {
+        "E11": -0.6389921520033044,
+        "E12": 0.6491777603758809,
+        "E21": -0.5980311730926989,
+        "E22": -0.553150367220719
+      },
+      "correlator_shots": {
+        "E11": 2421,
+        "E12": 2554,
+        "E21": 2438,
+        "E22": 2587
+      },
+      "num_bitstrings": 114,
+      "total_shots": 10000,
+      "violation": true
+    },
+    "Reflex Agent": {
+      "S": 0.4429798616245506,
+      "correlators": {
+        "E11": -0.634035522511359,
+        "E12": 0.6584022038567493,
+        "E21": -0.5632911392405063,
+        "E22": -0.5872509960159362
+      },
+      "correlator_shots": {
+        "E11": 2421,
+        "E12": 2541,
+        "E21": 2528,
+        "E22": 2510
+      },
+      "num_bitstrings": 62,
+      "total_shots": 10000,
+      "violation": true
+    },
+    "Always 3/4 Agent": {
+      "S": 0.3588387553157313,
+      "correlators": {
+        "E11": -0.63040841083704,
+        "E12": 0.6014882182720133,
+        "E21": -0.5163708086785009,
+        "E22": -0.6105713175281772
+      },
+      "correlator_shots": {
+        "E11": 2473,
+        "E12": 2419,
+        "E21": 2535,
+        "E22": 2573
+      },
+      "num_bitstrings": 148,
+      "total_shots": 10000,
+      "violation": true
+    }
+  }
+}

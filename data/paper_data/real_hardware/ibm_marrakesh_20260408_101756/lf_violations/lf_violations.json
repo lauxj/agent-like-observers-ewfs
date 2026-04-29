@@ -1,0 +1,79 @@
+{
+  "kind": "lf_violations",
+  "source_file": "real_hardware_run.json",
+  "source_path": "/Users/joshua/PycharmProjects/masters_thesis_project/data/data_real_hardware/ibm_marrakesh_20260408_101756/real_hardware_run.json",
+  "agents": {
+    "Betting Agent": {
+      "S": 0.2730619268517378,
+      "correlators": {
+        "E11": -0.6099683544303798,
+        "E12": 0.6225328947368421,
+        "E21": -0.5174032068830661,
+        "E22": -0.5231574708014498
+      },
+      "correlator_shots": {
+        "E11": 2528,
+        "E12": 2432,
+        "E21": 2557,
+        "E22": 2483
+      },
+      "num_bitstrings": 200,
+      "total_shots": 10000,
+      "violation": true
+    },
+    "Guessing Agent": {
+      "S": 0.3817686179317752,
+      "correlators": {
+        "E11": -0.6293622141997594,
+        "E12": 0.6611433305716653,
+        "E21": -0.5784929356357927,
+        "E22": -0.5127701375245579
+      },
+      "correlator_shots": {
+        "E11": 2493,
+        "E12": 2414,
+        "E21": 2548,
+        "E22": 2545
+      },
+      "num_bitstrings": 118,
+      "total_shots": 10000,
+      "violation": true
+    },
+    "Reflex Agent": {
+      "S": 0.4210711507266227,
+      "correlators": {
+        "E11": -0.6068376068376068,
+        "E12": 0.6684448091916291,
+        "E21": -0.5670020120724346,
+        "E22": -0.5787867226249523
+      },
+      "correlator_shots": {
+        "E11": 2457,
+        "E12": 2437,
+        "E21": 2485,
+        "E22": 2621
+      },
+      "num_bitstrings": 64,
+      "total_shots": 10000,
+      "violation": true
+    },
+    "Always 3/4 Agent": {
+      "S": 0.3106720905725062,
+      "correlators": {
+        "E11": -0.6036249014972419,
+        "E12": 0.6265211917750735,
+        "E21": -0.5015360983102919,
+        "E22": -0.5789898989898989
+      },
+      "correlator_shots": {
+        "E11": 2538,
+        "E12": 2383,
+        "E21": 2604,
+        "E22": 2475
+      },
+      "num_bitstrings": 148,
+      "total_shots": 10000,
+      "violation": true
+    }
+  }
+}
