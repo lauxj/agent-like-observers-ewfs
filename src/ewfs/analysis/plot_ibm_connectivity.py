@@ -21,28 +21,18 @@ import networkx as nx
 import numpy as np
 from qiskit_ibm_runtime.fake_provider import FakeMarrakesh, FakeTorino
 
-try:
-    from ewfs.agents import (
-        build_circuit_always_large,
-        build_circuit_betting,
-        build_circuit_guessing,
-        build_circuit_reflex,
-    )
-    from ewfs.find_best_agent_layouts import ordered_qubit_names, summarize_circuit
-except ModuleNotFoundError:
-    from agents import (
-        build_circuit_always_large,
-        build_circuit_betting,
-        build_circuit_guessing,
-        build_circuit_reflex,
-    )
-    from find_best_agent_layouts import ordered_qubit_names, summarize_circuit
+from ewfs.circuits.agents import (
+    build_circuit_always_large,
+    build_circuit_betting,
+    build_circuit_guessing,
+    build_circuit_reflex,
+)
+from ewfs.paths import PROJECT_ROOT
 
 if not hasattr(np, "alltrue"):
     np.alltrue = np.all
 
 
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
 OUTPUT_DIR = PROJECT_ROOT / "results" / "plots" / "plots_backend_connectivity"
 
 # Change this to "ibm_torino" or "ibm_marrakesh".
@@ -74,6 +64,29 @@ ROLE_COLORS = {
     "action": "#d62828",
     "choice": "#f4d35e",
 }
+
+
+def ordered_qubit_names(circuit) -> list[str]:
+    """Return the logical qubit register names in circuit order."""
+    return [qubit._register.name for qubit in circuit.qubits]
+
+
+def summarize_circuit(circuit) -> tuple[dict[tuple[int, int], int], dict[str, int]]:
+    """Count two-qubit connections and operation names used by a circuit."""
+    qubit_indices = {qubit: index for index, qubit in enumerate(circuit.qubits)}
+    edge_counts: dict[tuple[int, int], int] = {}
+    operation_counts: dict[str, int] = {}
+
+    for instruction in circuit.data:
+        operation = instruction.operation
+        qubits = instruction.qubits
+        operation_counts[operation.name] = operation_counts.get(operation.name, 0) + 1
+
+        if len(qubits) == 2:
+            edge = tuple(sorted((qubit_indices[qubits[0]], qubit_indices[qubits[1]])))
+            edge_counts[edge] = edge_counts.get(edge, 0) + 1
+
+    return edge_counts, operation_counts
 
 BACKEND_SPECS = {
     "ibm_torino": {
@@ -609,6 +622,11 @@ def plot_backend_agent_connectivity_simple(backend_name: str = BACKEND_NAME) -> 
     plt.close()
 
 
-if __name__ == "__main__":
+def main() -> None:
+    """Generate the backend-layout and agent-connectivity plots."""
     plot_backend_betting_layout_simple()
     plot_backend_agent_connectivity_simple()
+
+
+if __name__ == "__main__":
+    main()
