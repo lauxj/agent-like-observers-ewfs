@@ -18,3 +18,7 @@ results/
 # Local-only connectivity plotting work; not pushed until it is ready again.
 scripts/plot_ibm_connectivity.py
 src/ewfs/analysis/plot_ibm_connectivity.py
+
+# Local-only time-ordering work; not pushed until it is ready again.
+scripts/plot_time_ordering.py
+src/ewfs/analysis/time_ordering_hardware.py

@@ -15,7 +15,6 @@ python -c "from qiskit_ibm_runtime import QiskitRuntimeService; print(QiskitRunt
 import argparse
 from datetime import datetime
 from ewfs.analysis.lf_violations import LF_violation
-from ewfs.analysis.time_ordering_hardware import save_visualizations_for_run as run_time_ordering_hardware
 from ewfs.circuits.accuracy_test_circuits import ACCURACY_TEST_BUILDERS
 from ewfs.circuits.agents import AGENTS
 from ewfs.experiments.fake_hardware import prepare_fake_hardware_run, run_fake_hardware_for_backend
@@ -56,9 +55,6 @@ INCLUDE_ACCURACY_TEST_CIRCUITS = True
 NOISELESS_ACCURACY_TEST_SHOTS = NOISELESS_SHOTS
 FAKE_HARDWARE_ACCURACY_TEST_SHOTS = FAKE_HARDWARE_SHOTS
 REAL_HARDWARE_ACCURACY_TEST_SHOTS = 1000
-
-# Scheduler timing / time ordering analysis for the real hardware run
-DO_TIME_ORDERING_HARDWARE = True
 
 # Backends to use
 REAL_BACKENDS = {
@@ -325,10 +321,6 @@ def run_all(
                     shots=real_main_shots,
                     folder_ts=real_folder_ts,
                 )
-
-            if DO_TIME_ORDERING_HARDWARE:
-                print(f"\n=== Scheduler timing / time ordering ({backend.name}) ===")
-                run_time_ordering_hardware(real_run_dir)
 
             if CALCULATE_LF_VIOLATIONS:
                 print_lf_violations(

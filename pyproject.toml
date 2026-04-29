@@ -14,4 +14,3 @@ where = ["src"]
 [project.scripts]
 ewfs-run = "ewfs.experiments.run:main"
 ewfs-evaluate = "ewfs.analysis.agent_evaluation:main"
-ewfs-plot-time-ordering = "ewfs.analysis.time_ordering_hardware:main"

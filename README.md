@@ -27,17 +27,10 @@ Generate the main agent-evaluation outputs with:
 python scripts/evaluate_agents.py
 ```
 
-Generate time-ordering plots for the latest real-hardware run with:
-
-```bash
-python scripts/plot_time_ordering.py
-```
-
 The project can also be installed in editable mode:
 
 ```bash
 pip install -e .
 ```
 
-After that, the same entrypoints are available as `ewfs-run`, `ewfs-evaluate`,
-and `ewfs-plot-time-ordering`.
+After that, the same entrypoints are available as `ewfs-run` and `ewfs-evaluate`.
