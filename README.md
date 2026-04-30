@@ -52,6 +52,7 @@ git clone https://github.com/lauxj/masters_thesis_project.git
 cd masters_thesis_project
 python3.10 -m venv .venv
 source .venv/bin/activate
+python --version  # should show Python 3.10.x
 python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
 ```
