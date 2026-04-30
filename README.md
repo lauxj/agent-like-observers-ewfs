@@ -2,8 +2,6 @@
 
 This repository contains the code and data for my master's thesis project on "Local Friendliness violations with Agents on Quantum Computers".
 
-[Insert link to thesis here]
-
 The main goal of the project is to run an extended Wigner's friend scenario on a quantum computer and use quantum agents to represent a friend in the experiment.
 This repo contains the files for the pipeline of the experiment:
 
@@ -16,137 +14,69 @@ This repo contains the files for the pipeline of the experiment:
 
 ## Project Structure
 
-- `ewfs/`: all Python scripts for circuits, experiments, and analysis
-- `scripts/`: simple entry-point scripts with the main settings to change
-- `data/`: saved thesis data and local output for new runs
-- `notebooks/`: project notebooks
-- `results/`: folder for generated plots and output files
+- `ewfs/` -> all Python scripts for circuits, experiments, and analysis
+- `scripts/` -> simple entry-point scripts with the main settings to change
+- `data/` -> saved thesis data and local output for new runs
+- `notebooks/` -> project notebooks
+- `results/` -> folder for generated plots and output files
 
 ## Files in `scripts/`
 
-- `scripts/run_experiment.py`: main file to run the experiment, choose what to run
-- `scripts/evaluation.py`: main file for evaluation, choose which data to consider for evaluation
+- `scripts/run_experiment.py` -> main file to run the experiment, choose what to run
+- `scripts/evaluation.py` -> main file for evaluation, choose which data to consider for evaluation
 
 
 ## Files in `ewfs/`
 
-- `ewfs/experiments/run.py`: main experiment runner
-- `ewfs/analysis/agent_evaluation.py`: creates the thesis plots from saved data
-- `ewfs/circuits/agents.py`: defines the agent quantum circuit
-- `ewfs/circuits/accuracy_test_circuits.py`: defines the relaxed LF accuracy-test circuits
-- `ewfs/experiments/noiseless_simulation.py`: noiseless simulator runs.
-- `ewfs/experiments/fake_hardware.py`: noise-simulation runs
-- `ewfs/experiments/real_hardware.py`: real IBM hardware runs
-- `ewfs/experiments/ibm_transpilation.py`: transpilation for IBM backends
-- `ewfs/analysis/lf_violations.py`: LF correlator and violation calculations
-- `ewfs/analysis/plot_ibm_connectivity.py`: IBM connectivity/layout plots
-- `ewfs/analysis/time_ordering_hardware.py`: hardware scheduler timing plots
+- `ewfs/experiments/run.py` -> main experiment runner
+- `ewfs/analysis/agent_evaluation.py` -> creates the thesis plots from saved data
+- `ewfs/circuits/agents.py` -> defines the agent quantum circuit
+- `ewfs/circuits/accuracy_test_circuits.py` -> defines the relaxed LF accuracy-test circuits
+- `ewfs/experiments/noiseless_simulation.py` -> noiseless simulator runs.
+- `ewfs/experiments/fake_hardware.py` -> noise-simulation runs
+- `ewfs/experiments/real_hardware.py` -> real IBM hardware runs
+- `ewfs/experiments/ibm_transpilation.py` -> transpilation for IBM backends
+- `ewfs/analysis/lf_violations.py` -> LF correlator and violation calculations
+- `ewfs/analysis/plot_ibm_connectivity.py` -> IBM connectivity/layout plots
+- `ewfs/analysis/time_ordering_hardware.py` -> hardware scheduler timing plots
 
 
 
-## Installation
+## Quick Start
 
-The project should be run inside its own Python environment. This keeps the
-packages for this project separate from other Python projects on the computer.
-
-First, install Python if it is not already installed. Python 3.10 is recommended.
-
-Then open a terminal and move into the project folder. For example:
+Python 3.10 is recommended. Clone the repository and install the requirements in
+a project-specific environment:
 
 ```bash
-cd path/to/masters_thesis_project
-```
-
-Create a new environment called `.venv`:
-
-```bash
+git clone https://github.com/lauxj/masters_thesis_project.git
+cd masters_thesis_project
 python3.10 -m venv .venv
-```
-
-Activate the environment:
-
-```bash
 source .venv/bin/activate
-```
-
-After activation, the terminal usually shows `(.venv)` at the beginning of the
-line. This means the project environment is active.
-
-Install the required packages:
-
-```bash
 python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
 ```
 
-The installation only needs to be done once. When returning to the project later,
-open a terminal in the project folder and activate the environment again:
-
-```bash
-source .venv/bin/activate
-```
-
-On Windows, the activation command is usually:
+On Windows, activate the environment with:
 
 ```bash
 .venv\Scripts\activate
 ```
 
-Another recent Python 3 version may also work, but Python 3.10 is the safest
-choice for this repository.
+Another recent Python 3 version may also work. If `python3.10` is not available,
+use `python -m venv .venv` instead.
 
-## Running the Project in VS Code
+## VS Code / Notebook Use
 
-The easiest way to work with this repository is to open the project folder in
-VS Code and use one project-specific Python environment.
-
-Recommended VS Code workflow:
-
-1. Open this repository folder in VS Code.
-2. Install the VS Code Python and Jupyter extensions if VS Code asks for them.
-3. Open the VS Code terminal with `Terminal > New Terminal`.
-4. Create a virtual environment:
-
-```bash
-python3.10 -m venv .venv
-```
-
-If `python3.10` is not available, use another recent Python 3 version:
-
-```bash
-python -m venv .venv
-```
-
-5. Activate the environment:
-
-```bash
-source .venv/bin/activate
-```
-
-On Windows:
-
-```bash
-.venv\Scripts\activate
-```
-
-6. Install the requirements:
-
-```bash
-python -m pip install --upgrade pip
-python -m pip install -r requirements.txt
-```
-
-7. Tell VS Code to use this environment:
+Open this repository folder in VS Code. Install the Python and Jupyter extensions
+if VS Code asks for them. Then select the project environment:
 
 - For Python scripts, use `Python: Select Interpreter` and choose `.venv`.
 - For notebooks, use the kernel selector in the top-right of the notebook and
   choose the `.venv` Python environment.
 
-After this setup, Python files such as `scripts/run_experiment.py` and
-`scripts/evaluation.py` can be run from VS Code. The detailed run settings are
-near the top of those files.
-
-The easiest way to inspect the full pipeline interactively is the demo notebook:
+Python files such as `scripts/run_experiment.py` and `scripts/evaluation.py` can
+then be run from VS Code. The easiest way to inspect the full pipeline
+interactively is the demo notebook:
 
 ```text
 notebooks/project_demo.ipynb
