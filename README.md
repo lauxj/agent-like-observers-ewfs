@@ -18,7 +18,7 @@ This repo contains the files for the pipeline of the experiment:
 - `scripts/` -> simple entry-point scripts with the main settings to change
 - `data/` -> saved thesis data and local output for new runs
 - `notebooks/` -> project notebooks
-- `results/` -> folder for generated plots and output files
+- `results/` -> folder for generated plots and output files (gets created when running evaluation)
 
 ## Files in `scripts/`
 
