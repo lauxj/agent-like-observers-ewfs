@@ -7,4 +7,5 @@ matplotlib==3.6.2
 networkx==2.8.4
 notebook==6.5.2
 ipykernel==6.19.2
+ipython==7.31.1
 pylatexenc==2.10
