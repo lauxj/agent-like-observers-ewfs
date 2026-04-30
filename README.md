@@ -2,7 +2,7 @@
 
 This repository contains the code and data for my master's thesis project on "Local Friendliness violations with Agents on Quantum Computers".
 
-The main goal of the project is to run an extended Wigner's friend scenario on a quantum computer and use quantum agents to represent a friend in the experiment.
+The main goal of the project is to run an extended Wigner's friend scenario (ewfs) on a quantum computer and use quantum agents to represent a friend in the experiment.
 This repo contains the files for the pipeline of the experiment:
 
 1. Circuit construction
