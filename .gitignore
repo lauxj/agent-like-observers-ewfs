@@ -1,7 +1,10 @@
 .idea/
 .DS_Store
+.venv/
+venv/
 __pycache__/
 *.py[cod]
+
 
 # keep paperdata
 data/*
@@ -10,8 +13,6 @@ data/*
 !data/paperdata/**
 
 results/
-
-src/
 
 # GitHub-rendered demo notebook
 notebooks/*.ipynb

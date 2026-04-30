@@ -63,14 +63,16 @@ On Windows, activate the environment with:
 .venv\Scripts\activate
 ```
 
+
+
+## Usage
+
 To open the demo notebook, run:
 
 ```bash
 python -m notebook notebooks/project_demo.ipynb
 ```
 
-
-## Usage
 
 To make a new experimental run, open `scripts/run_experiment.py`, choose the
 settings near the top of the file, and run that file. The detailed experiment
