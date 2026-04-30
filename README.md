@@ -16,36 +16,30 @@ The main pipeline of the project is:
 
 ## Project Structure
 
-- `ewfs/` -> Python scripts for circuits, experiments, and analysis
-- `scripts/` -> small entry-point scripts with the main settings
-- `data/` -> saved thesis data and outputs from new runs
-- `notebooks/` -> project notebooks
-- `results/` -> generated plots and output files
-
-## Files in `scripts/` and `ewfs/`
-
 ```bash
 .
-├── scripts/
-│   ├── run_experiment.py              # main file for running experiments
-│   └── evaluation.py                  # main file for making evaluation plots
-└── ewfs/
-    ├── experiments/
-    │   ├── run.py                    # main experiment runner
-    │   ├── noiseless_simulation.py   # noiseless simulator script
-    │   ├── fake_hardware.py          # noise-simulation script
-    │   ├── real_hardware.py          # real IBM hardware runs
-    │   └── ibm_transpilation.py      # transpilation for IBM backends
-    ├── analysis/
-    │   ├── agent_evaluation.py       # creates thesis plots from data
-    │   ├── lf_violations.py          # LF correlator and violation calculations
-    │   ├── plot_ibm_connectivity.py  # IBM connectivity/layout plots
-    │   └── time_ordering_hardware.py # hardware scheduler timing plots
-    └── circuits/
-        ├── agents.py                 # builds agent quantum circuits
-        └── accuracy_test_circuits.py # relaxed LF accuracy-test circuits
+├── data/                             # saved thesis data and outputs from new runs
+├── ewfs/
+│   ├── analysis/
+│   │   ├── agent_evaluation.py       # creates thesis plots from data
+│   │   ├── lf_violations.py          # LF correlator and violation calculations
+│   │   ├── plot_ibm_connectivity.py  # IBM connectivity/layout plots
+│   │   └── time_ordering_hardware.py # hardware scheduler timing plots
+│   ├── circuits/
+│   │   ├── accuracy_test_circuits.py # relaxed LF accuracy-test circuits
+│   │   └── agents.py                 # builds agent quantum circuits
+│   └── experiments/
+│       ├── fake_hardware.py          # noise-simulation script
+│       ├── ibm_transpilation.py      # transpilation for IBM backends
+│       ├── noiseless_simulation.py   # noiseless simulator script
+│       ├── real_hardware.py          # real IBM hardware runs
+│       └── run.py                    # main experiment runner
+├── notebooks/                        # project notebooks
+├── results/                          # generated plots and output files
+└── scripts/
+    ├── evaluation.py                 # main file for making evaluation plots
+    └── run_experiment.py             # main file for running experiments
 ```
-
 
 ## Installation
 
