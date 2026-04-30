@@ -63,7 +63,7 @@ On Windows, activate the environment with:
 ```
 
 Using VS Code: A simple installation with VS Code would be to download the repository as a ZIP file, store it locally and then open it in VS Code. In the Terminal in VS Code, run the bash command above from the 3rd line.
-To run the notebook, choose the installed .venv kernel.
+To run the notebook, choose the installed .venv kernel i VS Code. 
 
 ## Usage
 
