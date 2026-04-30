@@ -1,27 +1,23 @@
 # Local Friendliness Violations with Agents on Quantum Computers
+# [IN PROGRESS]
 
 This repository contains the code and data for my master's thesis project.
 
 ## Project Structure
 
-- `ewfs/`: main Python code.
-- `data/paperdata/`: frozen data used for the thesis plots and results.
-- `data/data_noiseless_simulation/`: local output folder for new noiseless runs.
-- `data/data_fake_hardware/`: local output folder for new fake-hardware runs.
-- `data/data_real_hardware/`: local output folder for new real-hardware runs.
-- `data/IBM_calibrations/`: IBM calibration data used by the project.
-- `notebooks/`: notebooks used while developing and inspecting plots.
-- `results/`: generated plots and output files. This folder is not tracked.
-- `requirements.txt`: Python packages needed to run the project.
+- `ewfs/`: all Python scripts for circuits, experiments, and plotting
+- `data/`: saved thesis data and local output for new runs
+- `notebooks/`: project notebooks [IN PROGRESS]
+- `results/`: generated plots and output files
 
-## Main Files
+## Files in `ewfs/`
 
 - `ewfs/run.py`: main file for starting new experimental runs. The run settings
   are chosen inside this file.
 - `ewfs/agent_evaluation.py`: creates the thesis plots from saved data. By
-  default it uses `data/paperdata/`.
+  default it uses `data/paperdata/`, but can be used for new runs by changing its settings
 - `ewfs/agents.py`: defines the agent quantum circuits.
-- `ewfs/accuracy_test_circuits.py`: defines the memory accuracy-test circuits.
+- `ewfs/accuracy_test_circuits.py`: defines the relaxed LF accuracy-test circuits.
 - `ewfs/noiseless_simulation.py`: noiseless simulator runs.
 - `ewfs/fake_hardware.py`: noisy fake-hardware simulator runs.
 - `ewfs/real_hardware.py`: real IBM hardware runs.
@@ -62,3 +58,20 @@ switched to use newly generated runs from the normal data folders.
 Real IBM hardware runs require an IBM Quantum API token saved locally. The
 noiseless simulation, fake-hardware simulation, and evaluation from saved data
 do not require submitting new hardware jobs.
+
+## IBM Quantum API Token
+
+Real hardware runs need access to IBM Quantum.
+
+1. Create an IBM Quantum account at `https://quantum.cloud.ibm.com/`.
+2. Log in to the IBM Quantum Platform.
+3. Create or copy an IBM Cloud API key from your account/API key settings.
+4. Save the API key locally with Qiskit:
+
+```bash
+python -c "from qiskit_ibm_runtime import QiskitRuntimeService; QiskitRuntimeService.save_account(channel='ibm_quantum_platform', token='YOUR_IBM_API_KEY', set_as_default=True, overwrite=True)"
+```
+
+Replace `YOUR_IBM_API_KEY` with the API key from IBM Quantum. This only needs to
+be done once on a machine. After that, `ewfs/real_hardware.py` and `ewfs/run.py`
+can access IBM Quantum through Qiskit.
