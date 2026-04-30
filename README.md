@@ -42,7 +42,7 @@ This repo contains the files for the pipeline of the experiment:
 
 
 
-## Quick Start
+## Installation
 
 Python 3.10 is recommended. Clone the repository and install the requirements in
 a project-specific environment.
@@ -73,26 +73,6 @@ On Windows, activate the environment with:
 
 Another recent Python 3 version may also work. If `python3` is not available,
 use `python -m venv .venv` instead.
-
-## VS Code / Notebook Use
-
-Open this repository folder in VS Code. Install the Python and Jupyter extensions
-if VS Code asks for them. Then select the project environment:
-
-- For Python scripts, use `Python: Select Interpreter` and choose `.venv`.
-- For notebooks, use the kernel selector in the top-right of the notebook and
-  choose the `.venv` Python environment.
-
-Python files such as `scripts/run_experiment.py` and `scripts/evaluation.py` can
-then be run from VS Code. The easiest way to inspect the full pipeline
-interactively is the demo notebook:
-
-```text
-notebooks/project_demo.ipynb
-```
-
-Open it in VS Code, select the `.venv` kernel, and run the cells from top to
-bottom.
 
 
 ## Usage
