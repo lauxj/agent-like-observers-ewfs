@@ -5,13 +5,15 @@ This is intentionally the one simple backend-connectivity plotting script.
 Set BACKEND_NAME to either "ibm_torino" or "ibm_marrakesh", and it will:
 1. load the matching SVG geometry so the device still looks like a grid,
 2. draw the full coupling map in black,
-3. highlight the hard-coded Betting Agent / Always 3/4 layout,
+3. highlight the hard-coded Betting Agent layout,
 4. create an agent-only comparison plot for Reflex, Guessing, Betting, and Always 3/4.
 """
 
 from __future__ import annotations
 
 import re
+from collections import Counter
+from collections.abc import Iterable
 from pathlib import Path
 
 import matplotlib
@@ -28,7 +30,6 @@ try:
         build_circuit_guessing,
         build_circuit_reflex,
     )
-    from ewfs.find_best_agent_layouts import ordered_qubit_names, summarize_circuit
 except ModuleNotFoundError:
     from agents import (
         build_circuit_always_large,
@@ -36,7 +37,6 @@ except ModuleNotFoundError:
         build_circuit_guessing,
         build_circuit_reflex,
     )
-    from find_best_agent_layouts import ordered_qubit_names, summarize_circuit
 
 if not hasattr(np, "alltrue"):
     np.alltrue = np.all
@@ -69,6 +69,64 @@ AGENT_BUILDERS = {
     "Betting Agent": build_circuit_betting,
 }
 
+
+def ordered_qubit_names(circuit) -> list[str]:
+    names: list[str] = []
+    for qreg in circuit.qregs:
+        if len(qreg) == 1:
+            names.append(qreg.name)
+        else:
+            for index in range(len(qreg)):
+                names.append(f"{qreg.name}[{index}]")
+    return names
+
+
+def iter_operation_qubit_indices(circuit) -> Iterable[list[int]]:
+    global_index = {qubit: circuit.find_bit(qubit).index for qubit in circuit.qubits}
+
+    def walk(subcircuit, qubit_map: dict[object, object]) -> Iterable[list[int]]:
+        for instruction in subcircuit.data:
+            operation = instruction.operation
+            mapped_qubits = [qubit_map[qubit] for qubit in instruction.qubits]
+            blocks = getattr(operation, "blocks", ())
+
+            if blocks:
+                for block in blocks:
+                    if len(block.qubits) != len(mapped_qubits):
+                        raise ValueError(f"Unsupported control-flow qubit mapping in {operation.name}.")
+                    block_map = {
+                        block_qubit: mapped_qubits[index]
+                        for index, block_qubit in enumerate(block.qubits)
+                    }
+                    yield from walk(block, block_map)
+                continue
+
+            if operation.name in {"barrier", "measure"}:
+                continue
+
+            yield [global_index[qubit] for qubit in mapped_qubits]
+
+    yield from walk(circuit, {qubit: qubit for qubit in circuit.qubits})
+
+
+def summarize_circuit(circuit) -> tuple[dict[tuple[int, int], int], dict[int, int]]:
+    edge_counts: Counter[tuple[int, int]] = Counter()
+    activity: Counter[int] = Counter()
+
+    for indices in iter_operation_qubit_indices(circuit):
+        for index in indices:
+            activity[index] += 1
+
+        if len(indices) == 2:
+            edge_counts[tuple(sorted(indices))] += 1
+        elif len(indices) > 2:
+            raise ValueError(
+                "This plotter expects only one- and two-qubit operations after "
+                f"expanding control-flow blocks, but found an operation on {len(indices)} qubits."
+            )
+
+    return dict(edge_counts), dict(activity)
+
 ROLE_COLORS = {
     "core": "#2ca02c",
     "action": "#d62828",
@@ -96,7 +154,7 @@ BACKEND_SPECS = {
         "agent_title_size": 26,
         "title": (
             "ibm_torino Coupling Map (March 30, 2026)\n"
-            "Betting Agent / Always 3/4 layout without calibration data"
+            "Betting Agent layout without calibration data"
         ),
         "agent_title": (
             "ibm_torino agent connectivity (March 30, 2026)\n"
@@ -130,7 +188,7 @@ BACKEND_SPECS = {
         "agent_title_size": 22,
         "title": (
             "ibm_marrakesh Coupling Map (latest hard-coded real-hardware layout)\n"
-            "Betting Agent / Always 3/4 layout without calibration data"
+            "Betting Agent layout without calibration data"
         ),
         "agent_title": (
             "ibm_marrakesh agent connectivity (latest hard-coded real-hardware layouts)\n"
@@ -409,7 +467,7 @@ def plot_backend_betting_layout_simple(backend_name: str = BACKEND_NAME) -> None
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
     fig, ax = plt.subplots(figsize=spec["figure_size"])
-    fig.suptitle(spec["title"], fontsize=spec["title_size"], y=0.98)
+    title = fig.suptitle(spec["title"], fontsize=spec["title_size"], y=0.98)
 
     nx.draw_networkx_edges(
         graph,
@@ -487,8 +545,9 @@ def plot_backend_betting_layout_simple(backend_name: str = BACKEND_NAME) -> None
     ax.set_aspect("equal")
     plt.tight_layout()
 
-    for suffix in ("png", "pdf"):
-        plt.savefig(output_prefix_with_suffix(backend_name, suffix), bbox_inches="tight", pad_inches=0.2)
+    plt.savefig(output_prefix_with_suffix(backend_name, "png"), bbox_inches="tight", pad_inches=0.2)
+    title.remove()
+    plt.savefig(output_prefix_with_suffix(backend_name, "pdf"), bbox_inches="tight", pad_inches=0.2)
     plt.close()
 
 

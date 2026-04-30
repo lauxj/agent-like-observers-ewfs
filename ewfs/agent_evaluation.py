@@ -2,9 +2,9 @@
 Create evaluation plots from saved EWFS experiment runs.
 
 Inputs:
-- data/data_noiseless_simulation
-- data/data_fake_hardware
-- data/data_real_hardware
+- data/paperdata by default, for reproducing the thesis figures
+- data/data_noiseless_simulation, data/data_fake_hardware, and
+  data/data_real_hardware for newly generated runs
 - saved lf_violations/lf_violations.json files
 - optional accuracy-test result files
 
@@ -12,8 +12,9 @@ Outputs:
 - PNG/PDF plots under results/plots/plots_agent_evaluation/<timestamp>
 - JSON sidecar metadata for generated plots
 
-By default, the script uses the latest configured runs. Specific runs can be
-selected with --noiseless-run, --fake-run, and --real-run.
+By default, the script uses the frozen paper-data runs. Use
+--data-source latest-runs to evaluate newly generated runs instead. Specific
+runs can be selected with --noiseless-run, --fake-run, and --real-run.
 
 File map:
 - configuration constants
@@ -41,6 +42,10 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 DATA_DIR_REAL = PROJECT_ROOT / "data" / "data_real_hardware"
 DATA_DIR_NOISELESS = PROJECT_ROOT / "data" / "data_noiseless_simulation"
 DATA_DIR_FAKE = PROJECT_ROOT / "data" / "data_fake_hardware"
+PAPERDATA_ROOT = PROJECT_ROOT / "data" / "paperdata"
+PAPERDATA_DIR_NOISELESS = PAPERDATA_ROOT / "noiseless_simulation"
+PAPERDATA_DIR_FAKE = PAPERDATA_ROOT / "fake_hardware"
+PAPERDATA_DIR_REAL = PAPERDATA_ROOT / "real_hardware"
 PLOTS_ROOT = PROJECT_ROOT / "results" / "plots" / "plots_agent_evaluation"
 
 # -----------------------------------------------------------------------------
@@ -442,6 +447,7 @@ def resolve_run_dirs(
     data_dir: Path,
     result_filename: str,
     run_name: Optional[str] = None,
+    last_n: Optional[int] = None,
 ) -> Tuple[list[Path], str]:
     if run_name:
         return [resolve_manual_run_dir(data_dir, result_filename, run_name)], "manual"
@@ -450,16 +456,16 @@ def resolve_run_dirs(
     if run_paths:
         return [resolve_run_path(path_ref, data_dir, result_filename) for path_ref in run_paths], "paths"
 
-    last_n = int(EVALUATION_LAST_N[label])
-    if last_n <= 1:
+    resolved_last_n = int(last_n if last_n is not None else EVALUATION_LAST_N[label])
+    if resolved_last_n <= 1:
         return [find_latest_run(data_dir, result_filename, required_agent_names=STANDARD_AGENT_NAMES)], "latest"
 
     return latest_n_runs(
         data_dir,
         result_filename,
-        last_n,
+        resolved_last_n,
         required_agent_names=STANDARD_AGENT_NAMES,
-    ), f"last_{last_n}"
+    ), f"last_{resolved_last_n}"
 
 
 def resolve_accuracy_test_run_dirs(
@@ -468,6 +474,7 @@ def resolve_accuracy_test_run_dirs(
     main_result_filename: str,
     accuracy_test_result_filename: str,
     run_name: Optional[str] = None,
+    last_n: Optional[int] = None,
 ) -> Tuple[list[Path], str]:
     if run_name:
         run_dir = resolve_manual_run_dir(data_dir, main_result_filename, run_name)
@@ -501,15 +508,16 @@ def resolve_accuracy_test_run_dirs(
         data_dir,
         main_result_filename,
         run_name=None,
+        last_n=last_n,
     )
     if all((run_dir / accuracy_test_result_filename).exists() for run_dir in run_dirs):
         return run_dirs, selection_mode
 
-    last_n = int(EVALUATION_LAST_N[label])
-    fallback_mode = "latest_accuracy_test_available" if last_n <= 1 else f"last_{last_n}_accuracy_test_available"
-    if last_n <= 1:
+    resolved_last_n = int(last_n if last_n is not None else EVALUATION_LAST_N[label])
+    fallback_mode = "latest_accuracy_test_available" if resolved_last_n <= 1 else f"last_{resolved_last_n}_accuracy_test_available"
+    if resolved_last_n <= 1:
         return [find_latest_run(data_dir, accuracy_test_result_filename)], fallback_mode
-    return latest_n_runs(data_dir, accuracy_test_result_filename, last_n), fallback_mode
+    return latest_n_runs(data_dir, accuracy_test_result_filename, resolved_last_n), fallback_mode
 
 
 def resolve_lf_result_paths(run_dirs):
@@ -1374,8 +1382,16 @@ def load_backend_result(
     data_dir: Path,
     result_filename: str,
     run_name: Optional[str] = None,
+    last_n: Optional[int] = None,
+    data_source: str = "paperdata",
 ):
-    run_dirs, selection_mode = resolve_run_dirs(label, data_dir, result_filename, run_name=run_name)
+    run_dirs, selection_mode = resolve_run_dirs(
+        label,
+        data_dir,
+        result_filename,
+        run_name=run_name,
+        last_n=last_n,
+    )
     lf_result_paths = resolve_lf_result_paths(run_dirs)
     per_run_results = [extract_backend_run_result(label, run_dir, result_filename) for run_dir in run_dirs]
     backend_name = summarize_backend_name(result["backend_name"] for result in per_run_results)
@@ -1418,7 +1434,8 @@ def load_backend_result(
         "run_name": run_dirs[0].name if len(run_dirs) == 1 else f"{len(run_dirs)} runs",
         "run_names": [run_dir.name for run_dir in run_dirs],
         "run_count": len(run_dirs),
-        "selection_mode": selection_mode,
+        "selection_mode": f"{data_source}:{selection_mode}",
+        "data_source": data_source,
         "source_result_path": per_run_results[0]["result_path"],
         "source_result_paths": [result["result_path"] for result in per_run_results],
         "raw_shots_per_run": [int(result["raw_shots"]) for result in per_run_results],
@@ -1548,6 +1565,8 @@ def load_accuracy_test_backend_result(
     main_result_filename: str,
     accuracy_test_result_filename: str,
     run_name: Optional[str] = None,
+    last_n: Optional[int] = None,
+    data_source: str = "paperdata",
 ):
     run_dirs, selection_mode = resolve_accuracy_test_run_dirs(
         label,
@@ -1555,6 +1574,7 @@ def load_accuracy_test_backend_result(
         main_result_filename,
         accuracy_test_result_filename,
         run_name=run_name,
+        last_n=last_n,
     )
     per_run_results = [
         extract_accuracy_test_run_result(label, run_dir, accuracy_test_result_filename)
@@ -1596,7 +1616,8 @@ def load_accuracy_test_backend_result(
         "run_name": run_dirs[0].name if len(run_dirs) == 1 else f"{len(run_dirs)} runs",
         "run_names": [run_dir.name for run_dir in run_dirs],
         "run_count": len(run_dirs),
-        "selection_mode": selection_mode,
+        "selection_mode": f"{data_source}:{selection_mode}",
+        "data_source": data_source,
         "source_result_paths": [result["result_path"] for result in per_run_results],
         "raw_shots_per_run": [int(result["raw_shots"]) for result in per_run_results],
         "raw_shots_total": int(sum(result["raw_shots"] for result in per_run_results)),
@@ -3012,40 +3033,88 @@ def print_selection_summary(results):
             print(f"    - {run_name}")
 
 
+def evaluation_data_dirs(data_source: str) -> dict[str, Path]:
+    if data_source == "paperdata":
+        return {
+            "Noiseless": PAPERDATA_DIR_NOISELESS,
+            "Fake hardware": PAPERDATA_DIR_FAKE,
+            "Real hardware": PAPERDATA_DIR_REAL,
+        }
+    if data_source == "latest-runs":
+        return {
+            "Noiseless": DATA_DIR_NOISELESS,
+            "Fake hardware": DATA_DIR_FAKE,
+            "Real hardware": DATA_DIR_REAL,
+        }
+    raise ValueError(f"Unknown data source: {data_source}")
+
+
+def evaluation_last_n(args) -> dict[str, int]:
+    if args.last_n is None:
+        return dict(EVALUATION_LAST_N)
+    return {label: args.last_n for label in BACKEND_LABELS}
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Create EWFS evaluation plots from saved experiment runs."
     )
-    parser.add_argument("--noiseless-run", type=str, default=None, help="Run folder name inside data/data_noiseless_simulation.")
-    parser.add_argument("--fake-run", type=str, default=None, help="Run folder name inside data/data_fake_hardware.")
-    parser.add_argument("--real-run", type=str, default=None, help="Run folder name inside data/data_real_hardware.")
+    parser.add_argument(
+        "--data-source",
+        choices=["paperdata", "latest-runs"],
+        default="paperdata",
+        help=(
+            "Use frozen thesis data from data/paperdata, or use the latest N "
+            "runs from the normal data/data_* folders."
+        ),
+    )
+    parser.add_argument(
+        "--last-n",
+        type=int,
+        default=None,
+        help="Number of runs per backend when no explicit run folder is selected. Defaults to 10.",
+    )
+    parser.add_argument("--noiseless-run", type=str, default=None, help="Run folder name inside the selected noiseless data source.")
+    parser.add_argument("--fake-run", type=str, default=None, help="Run folder name inside the selected fake-hardware data source.")
+    parser.add_argument("--real-run", type=str, default=None, help="Run folder name inside the selected real-hardware data source.")
     args = parser.parse_args()
+    if args.last_n is not None and args.last_n <= 0:
+        parser.error("--last-n must be a positive integer.")
+
+    data_dirs = evaluation_data_dirs(args.data_source)
+    last_n_by_label = evaluation_last_n(args)
 
     results = [
         load_backend_result(
             "Noiseless",
-            DATA_DIR_NOISELESS,
+            data_dirs["Noiseless"],
             "noiseless_simulation.json",
             run_name=args.noiseless_run,
+            last_n=last_n_by_label["Noiseless"],
+            data_source=args.data_source,
         ),
         load_backend_result(
             "Fake hardware",
-            DATA_DIR_FAKE,
+            data_dirs["Fake hardware"],
             "fake_hardware_noise_sim.json",
             run_name=args.fake_run,
+            last_n=last_n_by_label["Fake hardware"],
+            data_source=args.data_source,
         ),
         load_backend_result(
             "Real hardware",
-            DATA_DIR_REAL,
+            data_dirs["Real hardware"],
             "real_hardware_run.json",
             run_name=args.real_run,
+            last_n=last_n_by_label["Real hardware"],
+            data_source=args.data_source,
         ),
     ]
     memory_inaccuracy_results = []
     accuracy_specs = [
-        ("Noiseless", DATA_DIR_NOISELESS, "noiseless_simulation.json", ACCURACY_TEST_RESULT_FILENAMES["Noiseless"], args.noiseless_run),
-        ("Fake hardware", DATA_DIR_FAKE, "fake_hardware_noise_sim.json", ACCURACY_TEST_RESULT_FILENAMES["Fake hardware"], args.fake_run),
-        ("Real hardware", DATA_DIR_REAL, "real_hardware_run.json", ACCURACY_TEST_RESULT_FILENAMES["Real hardware"], args.real_run),
+        ("Noiseless", data_dirs["Noiseless"], "noiseless_simulation.json", ACCURACY_TEST_RESULT_FILENAMES["Noiseless"], args.noiseless_run),
+        ("Fake hardware", data_dirs["Fake hardware"], "fake_hardware_noise_sim.json", ACCURACY_TEST_RESULT_FILENAMES["Fake hardware"], args.fake_run),
+        ("Real hardware", data_dirs["Real hardware"], "real_hardware_run.json", ACCURACY_TEST_RESULT_FILENAMES["Real hardware"], args.real_run),
     ]
     for label, data_dir, main_result_filename, accuracy_result_filename, run_name in accuracy_specs:
         main_result = result_for_label(results, label)
@@ -3057,6 +3126,8 @@ def main():
                     main_result_filename,
                     accuracy_result_filename,
                     run_name=run_name,
+                    last_n=last_n_by_label[label],
+                    data_source=args.data_source,
                 )
             )
         except FileNotFoundError as exc:
