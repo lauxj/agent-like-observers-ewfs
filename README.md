@@ -1,4 +1,4 @@
-# Local Friendliness violations with Agents on Quantum Computers [IN PROGRESS..]
+# Local Friendliness violations with Agents on Quantum Computers
 
 This repository contains the code and data for my master's thesis project on "Local Friendliness violations with Agents on Quantum Computers".
 
@@ -30,10 +30,10 @@ This repo contains the files for the pipeline of the experiment:
 - `ewfs/noiseless_simulation.py`: noiseless simulator runs.
 - `ewfs/fake_hardware.py`: noisy fake-hardware simulator runs.
 - `ewfs/real_hardware.py`: real IBM hardware runs.
-- `ewfs/ibm_transpilation.py`: transpilation for IBM backends.
-- `ewfs/lf_violations.py`: LF correlator and violation calculations.
-- `ewfs/plot_ibm_connectivity.py`: IBM connectivity/layout plots.
-- `ewfs/time_ordering_hardware.py`: hardware scheduler timing plots.
+- `ewfs/ibm_transpilation.py`: transpilation for IBM backends
+- `ewfs/lf_violations.py`: LF correlator and violation calculations
+- `ewfs/plot_ibm_connectivity.py`: IBM connectivity/layout plots
+- `ewfs/time_ordering_hardware.py`: hardware scheduler timing plots
 
 ## Installation
 
