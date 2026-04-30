@@ -22,6 +22,30 @@ The main pipeline of the project is:
 - `notebooks/` -> project notebooks
 - `results/` -> generated plots and output files 
 
+
+```bash
+.
+├── scripts/
+│   ├── run_experiment.py        # main file for running experiments
+│   └── evaluation.py           # main file for making evaluation
+└── ewfs/
+   ├── experiments/
+   │   ├── run.py              # main experiment runner
+   │   ├── noiseless_simulation.py   # noiseless simulator script
+   │   ├── fake_hardware.py    # noise-simulation script
+   │   ├── real_hardware.py    # real IBM hardware runs
+   │   └── ibm_transpilation.py # transpilation for IBM backends
+   ├── analysis/
+   │   ├── agent_evaluation.py # creates thesis plots from data
+   │   ├── lf_violations.py    # LF correlator & violation calculations
+   │   ├── plot_ibm_connectivity.py # IBM connectivity/layout plots
+   │   └── time_ordering_hardware.py # hardware scheduler timing plots
+   └── circuits/
+       ├── agents.py           # builds agent quantum circuits
+       └── accuracy_test_circuits.py # relaxed LF accuracy-test circuits
+```
+
+
 ## Files in `scripts/`
 
 - `scripts/run_experiment.py` -> main file for running experiments
