@@ -19,7 +19,7 @@ The main pipeline of the project is:
 ```bash
 .
 ├── data/                             
-│   └── paperdata/                    # saved runs used ffor thesis
+│   └── paperdata/                    # saved runs used used in thesis
 ├── ewfs/
 │   ├── analysis/
 │   │   ├── agent_evaluation.py       # creates thesis plots from data
@@ -89,12 +89,9 @@ To reproduce the thesis plots, open `scripts/evaluation.py` and use the runs in
 `data/paperdata/`. You can also change it to use new runs from the normal data
 folders.
 
-Real IBM hardware runs need an IBM Quantum API token saved on your machine.
+IBM Quantum API token is required for: real hardware runs, transpilation (to access calibration data) and fake-hardware simulation. Also the demo notebook needs an installed IBM API token. (installation see below)
 Noiseless simulation and evaluation from saved data do not need an IBM account.
 
-Transpilation and fake-hardware simulation do not submit real hardware jobs, but
-they still load an IBM backend through Qiskit. For those parts, you also need
-the IBM token below.
 
 ## IBM Quantum API Token
 
