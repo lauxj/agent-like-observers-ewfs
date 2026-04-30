@@ -44,35 +44,24 @@ This repo contains the files for the pipeline of the experiment:
 
 ## Installation
 
-Python 3.10 is recommended. Clone the repository and install the requirements in
-a project-specific environment.
+Python 3.10 is required. Newer Python versions may have issues.
+Clone the repository and install the requirements in a project-specific environment.
 
 ```bash
 git clone https://github.com/lauxj/masters_thesis_project.git
 cd masters_thesis_project
-python3 -m venv .venv
+python3.10 -m venv .venv
 source .venv/bin/activate
 python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
 ```
 
-If you downloaded the repository as a ZIP file instead, open the extracted folder and run in Terminal:
-
-```bash
-python3 -m venv .venv
-source .venv/bin/activate
-python -m pip install --upgrade pip
-python -m pip install -r requirements.txt
-```
 
 On Windows, activate the environment with:
 
 ```bash
 .venv\Scripts\activate
 ```
-
-Another recent Python 3 version may also work. If `python3` is not available,
-use `python -m venv .venv` instead.
 
 
 ## Usage
