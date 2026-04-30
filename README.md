@@ -56,7 +56,6 @@ python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
 ```
 
-
 On Windows, activate the environment with:
 
 ```bash
