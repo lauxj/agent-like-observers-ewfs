@@ -50,11 +50,17 @@ a project-specific environment:
 ```bash
 git clone https://github.com/lauxj/masters_thesis_project.git
 cd masters_thesis_project
-python3.10 -m venv .venv
+python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
+code .
 ```
+
+If you downloaded the repository as a ZIP file instead of using `git clone`,
+open the extracted folder in VS Code and start with `python3 -m venv .venv`.
+The final `code .` command opens the project folder in VS Code. If this command
+is not available, open the folder manually from VS Code instead.
 
 On Windows, activate the environment with:
 
@@ -62,7 +68,7 @@ On Windows, activate the environment with:
 .venv\Scripts\activate
 ```
 
-Another recent Python 3 version may also work. If `python3.10` is not available,
+Another recent Python 3 version may also work. If `python3` is not available,
 use `python -m venv .venv` instead.
 
 ## VS Code / Notebook Use
