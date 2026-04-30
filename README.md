@@ -1,7 +1,16 @@
-# Local Friendliness Violations with Agents on Quantum Computers
-# [IN PROGRESS]
+# Local Friendliness violations with Agents on Quantum Computers [IN PROGRESS..]
 
-This repository contains the code and data for my master's thesis project.
+This repository contains the code and data for my master's thesis project on "Local Friendliness violations with Agents on Quantum Computers".
+
+The main goal of the project is to run an extended Wigner's friend scenario on a quantum computer and use quantum agents to represent a friend in the experiment.
+This repo contains the files for the pipeline of the experiment:
+
+1. Circuit construction
+2. Noiseless (ideal) simulation
+3. Transpilation of circuits for IBM backends
+4. Noise simulation
+5. IBM hardware runs
+6. Evaluation of agents
 
 ## Project Structure
 
