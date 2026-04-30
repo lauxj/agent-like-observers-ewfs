@@ -37,17 +37,54 @@ This repo contains the files for the pipeline of the experiment:
 
 ## Installation
 
-Create a fresh Python environment and install the dependencies:
+The project should be run inside its own Python environment. This keeps the
+packages for this project separate from other Python projects on the computer.
+
+First, install Python if it is not already installed. Python 3.10 is recommended.
+
+Then open a terminal and move into the project folder. For example:
+
+```bash
+cd path/to/masters_thesis_project
+```
+
+Create a new environment called `.venv`:
 
 ```bash
 python3.10 -m venv .venv
+```
+
+Activate the environment:
+
+```bash
 source .venv/bin/activate
+```
+
+After activation, the terminal usually shows `(.venv)` at the beginning of the
+line. This means the project environment is active.
+
+Install the required packages:
+
+```bash
 python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
 ```
 
-Another recent Python 3 version may also work, as long as it is supported by the
-Qiskit packages in `requirements.txt`.
+The installation only needs to be done once. When returning to the project later,
+open a terminal in the project folder and activate the environment again:
+
+```bash
+source .venv/bin/activate
+```
+
+On Windows, the activation command is usually:
+
+```bash
+.venv\Scripts\activate
+```
+
+Another recent Python 3 version may also work, but Python 3.10 is the safest
+choice for this repository.
 
 ## Usage
 

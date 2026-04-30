@@ -9,11 +9,6 @@ data/*
 !data/paperdata/
 !data/paperdata/**
 
-!data/IBM_calibrations/
-data/IBM_calibrations/*
-!data/IBM_calibrations/ibm_marrakesh_calibrations_2026-04-07T22_56_28Z.csv
-
-
 results/
 
 scripts/
