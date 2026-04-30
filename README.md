@@ -20,50 +20,32 @@ The main pipeline of the project is:
 - `scripts/` -> small entry-point scripts with the main settings
 - `data/` -> saved thesis data and outputs from new runs
 - `notebooks/` -> project notebooks
-- `results/` -> generated plots and output files 
+- `results/` -> generated plots and output files
 
 ## Files in `scripts/` and `ewfs/`
+
 ```bash
 .
 ├── scripts/
-│   ├── run_experiment.py        # main file for running experiments
-│   └── evaluation.py           # main file for making evaluation
+│   ├── run_experiment.py              # main file for running experiments
+│   └── evaluation.py                  # main file for making evaluation plots
 └── ewfs/
-   ├── experiments/
-   │   ├── run.py              # main experiment runner
-   │   ├── noiseless_simulation.py   # noiseless simulator script
-   │   ├── fake_hardware.py    # noise-simulation script
-   │   ├── real_hardware.py    # real IBM hardware runs
-   │   └── ibm_transpilation.py # transpilation for IBM backends
-   ├── analysis/
-   │   ├── agent_evaluation.py # creates thesis plots from data
-   │   ├── lf_violations.py    # LF correlator & violation calculations
-   │   ├── plot_ibm_connectivity.py # IBM connectivity/layout plots
-   │   └── time_ordering_hardware.py # hardware scheduler timing plots
-   └── circuits/
-       ├── agents.py           # builds agent quantum circuits
-       └── accuracy_test_circuits.py # relaxed LF accuracy-test circuits
+    ├── experiments/
+    │   ├── run.py                    # main experiment runner
+    │   ├── noiseless_simulation.py   # noiseless simulator script
+    │   ├── fake_hardware.py          # noise-simulation script
+    │   ├── real_hardware.py          # real IBM hardware runs
+    │   └── ibm_transpilation.py      # transpilation for IBM backends
+    ├── analysis/
+    │   ├── agent_evaluation.py       # creates thesis plots from data
+    │   ├── lf_violations.py          # LF correlator and violation calculations
+    │   ├── plot_ibm_connectivity.py  # IBM connectivity/layout plots
+    │   └── time_ordering_hardware.py # hardware scheduler timing plots
+    └── circuits/
+        ├── agents.py                 # builds agent quantum circuits
+        └── accuracy_test_circuits.py # relaxed LF accuracy-test circuits
 ```
 
-
-## Files in `scripts/`
-
-- `scripts/run_experiment.py` -> main file for running experiments
-- `scripts/evaluation.py` -> main file for making evaluation
-
-## Files in `ewfs/`
-
-- `ewfs/experiments/run.py` -> main experiment runner
-- `ewfs/analysis/agent_evaluation.py` -> creates the thesis plots from saved data or new data
-- `ewfs/circuits/agents.py` -> builds the agent quantum circuits
-- `ewfs/circuits/accuracy_test_circuits.py` -> builds the relaxed LF accuracy-test circuits
-- `ewfs/experiments/noiseless_simulation.py` -> noiseless simulator script
-- `ewfs/experiments/fake_hardware.py` -> noise-simulation script
-- `ewfs/experiments/real_hardware.py` -> real IBM hardware runs
-- `ewfs/experiments/ibm_transpilation.py` -> transpilation for IBM backends
-- `ewfs/analysis/lf_violations.py` -> LF correlator and LF violation calculations
-- `ewfs/analysis/plot_ibm_connectivity.py` -> IBM connectivity/layout plots
-- `ewfs/analysis/time_ordering_hardware.py` -> hardware scheduler timing plots
 
 ## Installation
 
