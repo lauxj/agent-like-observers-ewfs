@@ -37,7 +37,7 @@ The main pipeline of the project is:
 │       └── run.py                    # main experiment runner
 ├── notebooks/                        
 │   └── project_demo.ipynb            # demo notebook for the project pipeline
-├── results/                          
+├── results/                          # generated after running experiment
 └── scripts/
     ├── evaluation.py                 # main file for making evaluation plots
     └── run_experiment.py             # main file for running experiments
