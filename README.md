@@ -45,7 +45,7 @@ This repo contains the files for the pipeline of the experiment:
 ## Quick Start
 
 Python 3.10 is recommended. Clone the repository and install the requirements in
-a project-specific environment:
+a project-specific environment.
 
 ```bash
 git clone https://github.com/lauxj/masters_thesis_project.git
@@ -54,13 +54,16 @@ python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
-code .
 ```
 
-If you downloaded the repository as a ZIP file instead of using `git clone`,
-open the extracted folder in VS Code and start with `python3 -m venv .venv`.
-The final `code .` command opens the project folder in VS Code. If this command
-is not available, open the folder manually from VS Code instead.
+If you downloaded the repository as a ZIP file instead, open the extracted folder and run in Terminal:
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
+```
 
 On Windows, activate the environment with:
 
