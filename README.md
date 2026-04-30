@@ -18,7 +18,8 @@ The main pipeline of the project is:
 
 ```bash
 .
-├── data/                             # saved thesis data and outputs from new runs
+├── data/                             
+│   └── paperdata/                    # saved runs used for the thesis plots
 ├── ewfs/
 │   ├── analysis/
 │   │   ├── agent_evaluation.py       # creates thesis plots from data
@@ -34,8 +35,9 @@ The main pipeline of the project is:
 │       ├── noiseless_simulation.py   # noiseless simulator script
 │       ├── real_hardware.py          # real IBM hardware runs
 │       └── run.py                    # main experiment runner
-├── notebooks/                        # project notebooks
-├── results/                          # generated plots and output files
+├── notebooks/                        
+│   └── project_demo.ipynb            # demo notebook for the project pipeline
+├── results/                          
 └── scripts/
     ├── evaluation.py                 # main file for making evaluation plots
     └── run_experiment.py             # main file for running experiments
