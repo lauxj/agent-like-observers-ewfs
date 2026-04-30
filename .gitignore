@@ -13,4 +13,8 @@ results/
 
 src/
 
+# GitHub-rendered demo notebook
+notebooks/*.ipynb
+!notebooks/project_demo.ipynb
+
 **/.DS_Store

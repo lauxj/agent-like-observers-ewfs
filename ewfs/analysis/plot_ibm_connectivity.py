@@ -211,6 +211,19 @@ def resolve_marrakesh_svg_path() -> Path:
     raise FileNotFoundError(f"No Marrakesh SVG geometry file found. Checked:\n{candidates}")
 
 
+def get_backend_positions(backend_name: str, graph: nx.Graph) -> dict[int, tuple[float, float]]:
+    """Return backend qubit positions, falling back if SVG geometry is unavailable."""
+    spec = BACKEND_SPECS[backend_name]
+    svg_path = spec["svg_path"]
+    if backend_name == "ibm_marrakesh":
+        try:
+            svg_path = resolve_marrakesh_svg_path()
+        except FileNotFoundError:
+            return nx.spring_layout(graph, seed=7)
+
+    return load_svg_qubit_coordinates(svg_path, spec["expected_qubits"])
+
+
 def load_svg_qubit_coordinates(svg_path: Path, expected_qubits: int) -> dict[int, tuple[float, float]]:
     """Recover fixed qubit coordinates from one IBM calibration SVG."""
     svg_text = svg_path.read_text()
@@ -442,19 +455,15 @@ def compact_agent_positions(
     return local_positions
 
 
-def plot_backend_betting_layout_simple(backend_name: str = BACKEND_NAME) -> None:
+def plot_backend_betting_layout_simple(backend_name: str = BACKEND_NAME, save: bool = True):
     """Render a plain backend grid with the betting layout highlighted."""
     if backend_name not in BACKEND_SPECS:
         known = ", ".join(sorted(BACKEND_SPECS))
         raise ValueError(f"Unknown backend '{backend_name}'. Known backends: {known}")
 
     spec = BACKEND_SPECS[backend_name]
-    svg_path = spec["svg_path"]
-    if backend_name == "ibm_marrakesh":
-        svg_path = resolve_marrakesh_svg_path()
-
-    positions = load_svg_qubit_coordinates(svg_path, spec["expected_qubits"])
     graph = build_backend_graph(backend_name)
+    positions = get_backend_positions(backend_name, graph)
     betting_layout = spec["betting_layout"]
     betting_edges = betting_edges_from_layout(betting_layout)
     sd_sc_edge = [tuple(sorted(betting_layout[:2]))]
@@ -542,25 +551,25 @@ def plot_backend_betting_layout_simple(backend_name: str = BACKEND_NAME) -> None
     ax.set_aspect("equal")
     plt.tight_layout()
 
-    plt.savefig(output_prefix_with_suffix(backend_name, "png"), bbox_inches="tight", pad_inches=0.2)
-    title.remove()
-    plt.savefig(output_prefix_with_suffix(backend_name, "pdf"), bbox_inches="tight", pad_inches=0.2)
-    plt.close()
+    if save:
+        plt.savefig(output_prefix_with_suffix(backend_name, "png"), bbox_inches="tight", pad_inches=0.2)
+        title.remove()
+        plt.savefig(output_prefix_with_suffix(backend_name, "pdf"), bbox_inches="tight", pad_inches=0.2)
+        plt.close(fig)
+        return None
+
+    return fig
 
 
-def plot_backend_agent_connectivity_simple(backend_name: str = BACKEND_NAME) -> None:
+def plot_backend_agent_connectivity_simple(backend_name: str = BACKEND_NAME, save: bool = True):
     """Render each agent's connectivity using only its assigned qubits."""
     if backend_name not in BACKEND_SPECS:
         known = ", ".join(sorted(BACKEND_SPECS))
         raise ValueError(f"Unknown backend '{backend_name}'. Known backends: {known}")
 
     spec = BACKEND_SPECS[backend_name]
-    svg_path = spec["svg_path"]
-    if backend_name == "ibm_marrakesh":
-        svg_path = resolve_marrakesh_svg_path()
-
-    positions = load_svg_qubit_coordinates(svg_path, spec["expected_qubits"])
     graph = build_backend_graph(backend_name)
+    positions = get_backend_positions(backend_name, graph)
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
     fig, axes = plt.subplots(1, len(AGENT_BUILDERS), figsize=spec["agent_figure_size"])
@@ -660,9 +669,13 @@ def plot_backend_agent_connectivity_simple(backend_name: str = BACKEND_NAME) -> 
 
     plt.tight_layout(w_pad=0.05, pad=0.3)
 
-    for suffix in ("png", "pdf"):
-        plt.savefig(agent_output_prefix_with_suffix(backend_name, suffix), bbox_inches="tight", pad_inches=0.2)
-    plt.close()
+    if save:
+        for suffix in ("png", "pdf"):
+            plt.savefig(agent_output_prefix_with_suffix(backend_name, suffix), bbox_inches="tight", pad_inches=0.2)
+        plt.close(fig)
+        return None
+
+    return fig
 
 
 if __name__ == "__main__":
