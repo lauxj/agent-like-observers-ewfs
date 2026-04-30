@@ -18,6 +18,7 @@ results/
 
 # GitHub-rendered demo notebook
 notebooks/*.ipynb
+notebooks/.ipynb_checkpoints/
 !notebooks/project_demo.ipynb
 
 **/.DS_Store
