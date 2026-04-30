@@ -113,3 +113,7 @@ Replace `YOUR_IBM_API_KEY` with the API key from IBM Quantum. This only needs to
 be done once on a machine. After that, `scripts/run_experiment.py` and
 `ewfs/experiments/real_hardware.py`
 can access IBM Quantum through Qiskit.
+
+## License
+
+This project is licensed under the MIT License. See `LICENSE` for details.
