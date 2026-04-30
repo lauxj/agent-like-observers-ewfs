@@ -22,7 +22,7 @@ The main pipeline of the project is:
 - `notebooks/` -> project notebooks
 - `results/` -> generated plots and output files 
 
-
+## Files in `scripts/` and `ewfs/`
 ```bash
 .
 ├── scripts/
