@@ -19,7 +19,7 @@ The main pipeline of the project is:
 ```bash
 .
 ├── data/                             
-│   └── paperdata/                    # saved runs used for the thesis plots
+│   └── paperdata/                    # saved runs used ffor thesis
 ├── ewfs/
 │   ├── analysis/
 │   │   ├── agent_evaluation.py       # creates thesis plots from data
