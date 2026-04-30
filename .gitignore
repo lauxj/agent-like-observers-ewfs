@@ -11,7 +11,6 @@ data/*
 
 results/
 
-scripts/
 src/
 
 **/.DS_Store

@@ -15,18 +15,23 @@ python -c "from qiskit_ibm_runtime import QiskitRuntimeService; print(QiskitRunt
 import argparse
 from datetime import datetime
 from pathlib import Path
+import sys
 
-from accuracy_test_circuits import ACCURACY_TEST_BUILDERS
-from agents import AGENTS
-from fake_hardware import prepare_fake_hardware_run, run_fake_hardware_for_backend
-from lf_violations import LF_violation
-from noiseless_simulation import run_noiseless_simulation
-from real_hardware import (
+EWFS_ROOT = Path(__file__).resolve().parents[1]
+if str(EWFS_ROOT) not in sys.path:
+    sys.path.insert(0, str(EWFS_ROOT))
+
+from circuits.accuracy_test_circuits import ACCURACY_TEST_BUILDERS
+from circuits.agents import AGENTS
+from experiments.fake_hardware import prepare_fake_hardware_run, run_fake_hardware_for_backend
+from analysis.lf_violations import LF_violation
+from experiments.noiseless_simulation import run_noiseless_simulation
+from experiments.real_hardware import (
     prepare_real_hardware_run,
     run_grouped_real_hardware_for_backend,
     run_real_hardware_for_backend,
 )
-from time_ordering_hardware import save_visualizations_for_run as run_time_ordering_hardware
+from analysis.time_ordering_hardware import save_visualizations_for_run as run_time_ordering_hardware
 
 
 # -----------------------------------------------------------------------------
@@ -78,7 +83,7 @@ LF_AGENTS = ["Betting Agent", "Guessing Agent", "Reflex Agent", "Always 3/4 Agen
 
 def get_latest_noiseless_file():
     """Return the newest noiseless simulation JSON file."""
-    root = Path(__file__).resolve().parent.parent
+    root = Path(__file__).resolve().parents[2]
     data_dir = root / "data" / "data_noiseless_simulation"
     candidates = sorted(data_dir.glob("noiseless_simulation_*/noiseless_simulation.json"))
     return candidates[-1] if candidates else None
@@ -86,7 +91,7 @@ def get_latest_noiseless_file():
 
 def get_latest_fake_file(backend_name: str):
     """Return the newest fake hardware JSON file for one backend."""
-    root = Path(__file__).resolve().parent.parent
+    root = Path(__file__).resolve().parents[2]
     data_dir = root / "data" / "data_fake_hardware"
     candidates = sorted(data_dir.glob(f"{backend_name}_*/fake_hardware_noise_sim.json"))
     return candidates[-1] if candidates else None
@@ -94,7 +99,7 @@ def get_latest_fake_file(backend_name: str):
 
 def get_latest_real_file(backend_name: str):
     """Return the newest real hardware JSON file for one backend."""
-    root = Path(__file__).resolve().parent.parent
+    root = Path(__file__).resolve().parents[2]
     data_dir = root / "data" / "data_real_hardware"
     candidates = sorted(data_dir.glob(f"{backend_name}_*/real_hardware_run.json"))
     return candidates[-1] if candidates else None
@@ -341,9 +346,47 @@ def run_all(
                 )
 
 
+def run_with_settings(
+    *,
+    run_noiseless=DO_NOISELESS_SIM,
+    run_fake_hardware=DO_FAKE_HARDWARE_SIM,
+    run_real_hardware=DO_REAL_HARDWARE,
+    backend_name="ibm_marrakesh",
+    noiseless_shots=NOISELESS_SHOTS,
+    fake_hardware_shots=FAKE_HARDWARE_SHOTS,
+    real_hardware_shots=REAL_HARDWARE_SHOTS,
+    include_accuracy_tests=INCLUDE_ACCURACY_TEST_CIRCUITS,
+):
+    """Apply the simple front-door settings and run the experiment."""
+    known_backends = {"ibm_torino", "ibm_kingston", "ibm_fez", "ibm_marrakesh"}
+    if backend_name not in known_backends:
+        raise ValueError(f"Unknown backend_name: {backend_name}. Choose one of {sorted(known_backends)}.")
+
+    global DO_NOISELESS_SIM, DO_FAKE_HARDWARE_SIM, DO_REAL_HARDWARE, DO_IBM_TRANSPILATION
+    global NOISELESS_SHOTS, FAKE_HARDWARE_SHOTS, REAL_HARDWARE_SHOTS
+    global NOISELESS_ACCURACY_TEST_SHOTS, FAKE_HARDWARE_ACCURACY_TEST_SHOTS, REAL_HARDWARE_ACCURACY_TEST_SHOTS
+    global REAL_BACKENDS
+
+    DO_NOISELESS_SIM = run_noiseless
+    DO_FAKE_HARDWARE_SIM = run_fake_hardware
+    DO_REAL_HARDWARE = run_real_hardware
+    DO_IBM_TRANSPILATION = run_fake_hardware or run_real_hardware
+
+    NOISELESS_SHOTS = noiseless_shots
+    FAKE_HARDWARE_SHOTS = fake_hardware_shots
+    REAL_HARDWARE_SHOTS = real_hardware_shots
+    NOISELESS_ACCURACY_TEST_SHOTS = noiseless_shots
+    FAKE_HARDWARE_ACCURACY_TEST_SHOTS = fake_hardware_shots
+    REAL_HARDWARE_ACCURACY_TEST_SHOTS = real_hardware_shots
+
+    REAL_BACKENDS = {backend: backend == backend_name for backend in known_backends}
+
+    run_all(include_accuracy_tests=include_accuracy_tests)
+
+
 if __name__ == "__main__":
     # Read optional terminal arguments, then pass them into the main runner.
-    # Example: python ewfs/run.py --shots-main 5000 --exclude-accuracy-tests
+    # Example: python ewfs/experiments/run.py --shots-main 5000 --exclude-accuracy-tests
     args = parse_args()
     run_all(
         include_accuracy_tests=args.include_accuracy_tests,

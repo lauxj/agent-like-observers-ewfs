@@ -15,16 +15,21 @@ import json
 import pickle
 from datetime import datetime
 from pathlib import Path
+import sys
 
 from qiskit.primitives.containers.sampler_pub import SamplerPub
 from qiskit_ibm_runtime import QiskitRuntimeService
 from qiskit_ibm_runtime import SamplerV2 as Sampler
 
-from ibm_transpilation import PLOT_DIR as TRANSPILATION_PLOT_DIR
-from ibm_transpilation import transpile_all_agents
+EWFS_ROOT = Path(__file__).resolve().parents[1]
+if str(EWFS_ROOT) not in sys.path:
+    sys.path.insert(0, str(EWFS_ROOT))
+
+from experiments.ibm_transpilation import PLOT_DIR as TRANSPILATION_PLOT_DIR
+from experiments.ibm_transpilation import transpile_all_agents
 
 # define directories
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DATA_DIR_REAL = PROJECT_ROOT / "data" / "data_real_hardware"
 DEFAULT_RESULT_FILENAME = "real_hardware_run.json"
 DEFAULT_TIMING_FILENAME = "scheduler_timing_metadata.json"

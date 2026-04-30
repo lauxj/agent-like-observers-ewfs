@@ -14,26 +14,36 @@ This repo contains the files for the pipeline of the experiment:
 
 ## Project Structure
 
-- `ewfs/`: all Python scripts for circuits, experiments, and plotting
+- `ewfs/`: all Python scripts for circuits, experiments, and analysis
+- `ewfs/circuits/`: circuit construction files
+- `ewfs/experiments/`: simulation, transpilation, and hardware execution files
+- `ewfs/analysis/`: plotting and analysis files
+- `scripts/`: simple entry-point scripts with the main settings to change
 - `data/`: saved thesis data and local output for new runs
 - `notebooks/`: project notebooks [IN PROGRESS]
 - `results/`: generated plots and output files
 
 ## Files in `ewfs/`
 
-- `ewfs/run.py`: main file for starting new experimental runs. The run settings
-  are chosen inside this file.
-- `ewfs/agent_evaluation.py`: creates the thesis plots from saved data. By
+- `ewfs/experiments/run.py`: main experiment runner used by `scripts/run_experiment.py`.
+- `ewfs/analysis/agent_evaluation.py`: creates the thesis plots from saved data. By
   default it uses `data/paperdata/`, but can be used for new runs by changing its settings
-- `ewfs/agents.py`: defines the agent quantum circuits.
-- `ewfs/accuracy_test_circuits.py`: defines the relaxed LF accuracy-test circuits.
-- `ewfs/noiseless_simulation.py`: noiseless simulator runs.
-- `ewfs/fake_hardware.py`: noisy fake-hardware simulator runs.
-- `ewfs/real_hardware.py`: real IBM hardware runs.
-- `ewfs/ibm_transpilation.py`: transpilation for IBM backends
-- `ewfs/lf_violations.py`: LF correlator and violation calculations
-- `ewfs/plot_ibm_connectivity.py`: IBM connectivity/layout plots
-- `ewfs/time_ordering_hardware.py`: hardware scheduler timing plots
+- `ewfs/circuits/agents.py`: defines the agent quantum circuits.
+- `ewfs/circuits/accuracy_test_circuits.py`: defines the relaxed LF accuracy-test circuits.
+- `ewfs/experiments/noiseless_simulation.py`: noiseless simulator runs.
+- `ewfs/experiments/fake_hardware.py`: noisy fake-hardware simulator runs.
+- `ewfs/experiments/real_hardware.py`: real IBM hardware runs.
+- `ewfs/experiments/ibm_transpilation.py`: transpilation for IBM backends
+- `ewfs/analysis/lf_violations.py`: LF correlator and violation calculations
+- `ewfs/analysis/plot_ibm_connectivity.py`: IBM connectivity/layout plots
+- `ewfs/analysis/time_ordering_hardware.py`: hardware scheduler timing plots
+
+## Files in `scripts/`
+
+- `scripts/run_experiment.py`: simple file for choosing whether to run noiseless,
+  fake-hardware, and/or real-hardware experiments, as well as shots and backend.
+- `scripts/evaluation.py`: simple file for choosing whether evaluation uses
+  `paperdata` or the latest runs in the normal data folders.
 
 ## Installation
 
@@ -88,8 +98,9 @@ choice for this repository.
 
 ## Usage
 
-To make a new experimental run, open `ewfs/run.py`, choose the settings in the
-configuration section, and run that file.
+To make a new experimental run, open `scripts/run_experiment.py`, choose the
+settings near the top of the file, and run that file. The detailed experiment
+settings stay in `ewfs/experiments/run.py`.
 
 New runs are saved in the normal data folders:
 
@@ -97,9 +108,10 @@ New runs are saved in the normal data folders:
 - `data/data_fake_hardware/`
 - `data/data_real_hardware/`
 
-To reproduce the thesis plots, use `ewfs/agent_evaluation.py`. By default, it
-loads the frozen runs in `data/paperdata/`. The evaluation file can also be
-switched to use newly generated runs from the normal data folders.
+To reproduce the thesis plots, open `scripts/evaluation.py`, choose the data
+source near the top of the file, and run that file. By default, the evaluation
+loads the frozen runs in `data/paperdata/`. It can also be switched to use newly
+generated runs from the normal data folders.
 
 Real IBM hardware runs require an IBM Quantum API token saved locally. The
 noiseless simulation, fake-hardware simulation, and evaluation from saved data
@@ -119,5 +131,6 @@ python -c "from qiskit_ibm_runtime import QiskitRuntimeService; QiskitRuntimeSer
 ```
 
 Replace `YOUR_IBM_API_KEY` with the API key from IBM Quantum. This only needs to
-be done once on a machine. After that, `ewfs/real_hardware.py` and `ewfs/run.py`
+be done once on a machine. After that, `scripts/run_experiment.py` and
+`ewfs/experiments/real_hardware.py`
 can access IBM Quantum through Qiskit.

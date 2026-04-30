@@ -8,14 +8,20 @@ Aer simulator from that backend, and saves the resulting counts as JSON.
 import json
 from datetime import datetime
 from pathlib import Path
+import sys
 from qiskit_aer import AerSimulator
 from qiskit_aer.noise import NoiseModel
 from qiskit_ibm_runtime import QiskitRuntimeService
-from ibm_transpilation import PLOT_DIR as TRANSPILATION_PLOT_DIR
-from ibm_transpilation import transpile_all_agents
+
+EWFS_ROOT = Path(__file__).resolve().parents[1]
+if str(EWFS_ROOT) not in sys.path:
+    sys.path.insert(0, str(EWFS_ROOT))
+
+from experiments.ibm_transpilation import PLOT_DIR as TRANSPILATION_PLOT_DIR
+from experiments.ibm_transpilation import transpile_all_agents
 
 # define directories
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DATA_DIR_FAKE = PROJECT_ROOT / "data" / "data_fake_hardware"
 DEFAULT_RESULT_FILENAME = "fake_hardware_noise_sim.json"
 
@@ -48,8 +54,9 @@ def run_fake_hardware_for_backend(
     shots=10_000,
     folder_ts=None,
     result_filename=DEFAULT_RESULT_FILENAME,
+    save=True,
 ):
-    """Run noisy simulations for all transpiled agent circuits and save counts."""
+    """Run noisy simulations for all transpiled agent circuits."""
     print("\n=== Fake hardware simulation ===")
     print(f"Backend: {backend.name}")
     print(f"Shots: {shots}")
@@ -71,14 +78,17 @@ def run_fake_hardware_for_backend(
         print(f"  {agent_name}: done")
         run_data["agents"][agent_name] = {"counts": counts}
 
-    folder_ts, run_folder_name = make_run_folder_name(backend, folder_ts)
-    out_dir = DATA_DIR_FAKE / run_folder_name
-    out_dir.mkdir(parents=True, exist_ok=True)
+    if save:
+        folder_ts, run_folder_name = make_run_folder_name(backend, folder_ts)
+        out_dir = DATA_DIR_FAKE / run_folder_name
+        out_dir.mkdir(parents=True, exist_ok=True)
 
-    out_path = out_dir / result_filename
-    save_json(out_path, run_data)
-    print(f"Saved data to: {out_path.resolve()}")
-    return out_path
+        out_path = out_dir / result_filename
+        save_json(out_path, run_data)
+        print(f"Saved data to: {out_path.resolve()}")
+        return out_path
+
+    return run_data
 
 
 def simulate_circuit(tqc, simulator, shots):

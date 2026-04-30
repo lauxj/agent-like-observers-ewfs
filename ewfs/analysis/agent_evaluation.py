@@ -38,7 +38,7 @@ from matplotlib.lines import Line2D
 from matplotlib.patches import Patch
 
 # directories
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DATA_DIR_REAL = PROJECT_ROOT / "data" / "data_real_hardware"
 DATA_DIR_NOISELESS = PROJECT_ROOT / "data" / "data_noiseless_simulation"
 DATA_DIR_FAKE = PROJECT_ROOT / "data" / "data_fake_hardware"
@@ -50,6 +50,13 @@ PLOTS_ROOT = PROJECT_ROOT / "results" / "plots" / "plots_agent_evaluation"
 
 # -----------------------------------------------------------------------------
 # Configuration
+
+# Choose which saved data to evaluate.
+# "paperdata" uses the frozen thesis runs in data/paperdata.
+# "latest-runs" uses the newest runs in data/data_noiseless_simulation,
+# data/data_fake_hardware, and data/data_real_hardware.
+EVALUATION_DATA_SOURCE = "paperdata"
+#EVALUATION_DATA_SOURCE = "latest-runs"
 
 # Number of runs to aggregate per backend. This takes the n-latest runs, so make
 # sure those runs are from one backend and close together in time.
@@ -3055,14 +3062,14 @@ def evaluation_last_n(args) -> dict[str, int]:
     return {label: args.last_n for label in BACKEND_LABELS}
 
 
-def main():
+def main(argv=None):
     parser = argparse.ArgumentParser(
         description="Create EWFS evaluation plots from saved experiment runs."
     )
     parser.add_argument(
         "--data-source",
         choices=["paperdata", "latest-runs"],
-        default="paperdata",
+        default=EVALUATION_DATA_SOURCE,
         help=(
             "Use frozen thesis data from data/paperdata, or use the latest N "
             "runs from the normal data/data_* folders."
@@ -3072,12 +3079,12 @@ def main():
         "--last-n",
         type=int,
         default=None,
-        help="Number of runs per backend when no explicit run folder is selected. Defaults to 10.",
+        help="Number of runs per backend when no explicit run folder is selected. Defaults to EVALUATION_LAST_N.",
     )
     parser.add_argument("--noiseless-run", type=str, default=None, help="Run folder name inside the selected noiseless data source.")
     parser.add_argument("--fake-run", type=str, default=None, help="Run folder name inside the selected fake-hardware data source.")
     parser.add_argument("--real-run", type=str, default=None, help="Run folder name inside the selected real-hardware data source.")
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
     if args.last_n is not None and args.last_n <= 0:
         parser.error("--last-n must be a positive integer.")
 
@@ -3256,6 +3263,21 @@ def main():
     for result in memory_inaccuracy_results:
         if not result.get("available", True):
             print(f"Memory inaccuracy unavailable for {result['display_label']}: {result['error']}")
+
+
+def evaluate_with_settings(*, data_source=EVALUATION_DATA_SOURCE, last_n=None):
+    """Apply the simple front-door settings and create the evaluation plots."""
+    global EVALUATION_DATA_SOURCE, EVALUATION_LAST_N
+
+    EVALUATION_DATA_SOURCE = data_source
+    if last_n is not None:
+        EVALUATION_LAST_N = {
+            "Noiseless": last_n,
+            "Fake hardware": last_n,
+            "Real hardware": last_n,
+        }
+
+    main(argv=[])
 
 
 if __name__ == "__main__":

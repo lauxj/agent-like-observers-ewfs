@@ -7,16 +7,21 @@ import re
 from pathlib import Path
 from datetime import datetime
 import json
+import sys
 import matplotlib.pyplot as plt
 from qiskit import transpile
 from qiskit.exceptions import MissingOptionalLibraryError
 from qiskit.visualization import circuit_drawer
 from qiskit_ibm_runtime import QiskitRuntimeService
-# import agents from agents.py:
-from agents import AGENTS
+
+EWFS_ROOT = Path(__file__).resolve().parents[1]
+if str(EWFS_ROOT) not in sys.path:
+    sys.path.insert(0, str(EWFS_ROOT))
+
+from circuits.agents import AGENTS
 
 # define directories
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
 PLOT_DIR = PROJECT_ROOT / "results" / "plots" / "plots_ibm_transpilation"
 PLOT_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -220,9 +225,6 @@ def transpiled_circuit_metrics(agent_name, tqc):
 
 def save_transpiled_plot(original_qc, transpiled_qc, agent_name, plots_dir, cz_count):
     """Save the transpiled circuit as PNG and PDF."""
-    plot_qc = transpiled_qc.copy()
-    plot_qc.name = agent_name
-    plot_qc.global_phase = 0
     base_plot_dir = plots_dir if plots_dir is not None else PLOT_DIR
     safe_name = safe_label(agent_name)
     agent_dir = base_plot_dir / safe_name
@@ -230,31 +232,50 @@ def save_transpiled_plot(original_qc, transpiled_qc, agent_name, plots_dir, cz_c
 
     filename = f"{safe_name}_circuit_depth{transpiled_qc.depth()}_cz{cz_count}.png"
     plot_path = agent_dir / filename
-    wire_order = build_plot_wire_order(original_qc, transpiled_qc)
 
     try:
-        fig = circuit_drawer(
-            plot_qc,
-            output="mpl",
-            fold=TRANSPILED_PLOT_FOLD,
-            scale=1.2,
-            style={
-                "fontsize": TRANSPILED_PLOT_FONTSIZE,
-                "subfontsize": TRANSPILED_PLOT_SUBFONTSIZE,
-            },
-            wire_order=wire_order,
-        )
+        fig = make_transpiled_plot_figure(original_qc, transpiled_qc, agent_name)
     except MissingOptionalLibraryError as exc:
         print(f"    skipped circuit plot ({exc})")
         return
 
-    clean_transpiled_plot_labels(fig)
-    fig.suptitle(f"{agent_name} - Transpiled Circuit", fontsize=20)
     fig.savefig(plot_path, dpi=300, bbox_inches="tight")
     if fig._suptitle is not None:
         fig._suptitle.remove()
     fig.savefig(plot_path.with_suffix(".pdf"), dpi=300, bbox_inches="tight")
     plt.close(fig)
+
+
+def make_transpiled_plot_figure(
+    original_qc,
+    transpiled_qc,
+    agent_name,
+    title=True,
+    fold=TRANSPILED_PLOT_FOLD,
+):
+    """Create one transpiled circuit diagram figure without saving it."""
+    plot_qc = transpiled_qc.copy()
+    plot_qc.name = agent_name
+    plot_qc.global_phase = 0
+    wire_order = build_plot_wire_order(original_qc, transpiled_qc)
+
+    draw_kwargs = {
+        "output": "mpl",
+        "scale": 1.2,
+        "style": {
+            "fontsize": TRANSPILED_PLOT_FONTSIZE,
+            "subfontsize": TRANSPILED_PLOT_SUBFONTSIZE,
+        },
+        "wire_order": wire_order,
+    }
+    if fold is not None:
+        draw_kwargs["fold"] = fold
+
+    fig = circuit_drawer(plot_qc, **draw_kwargs)
+    clean_transpiled_plot_labels(fig)
+    if title:
+        fig.suptitle(f"{agent_name} - Transpiled Circuit", fontsize=20)
+    return fig
 
 
 def build_plot_wire_order(original_qc, transpiled_qc):

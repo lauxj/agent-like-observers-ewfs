@@ -7,13 +7,18 @@ import json
 import re
 from datetime import datetime
 from pathlib import Path
+import sys
 import matplotlib.pyplot as plt
 from qiskit_aer import AerSimulator
-# import agents from agents.py:
-from agents import AGENTS
+
+EWFS_ROOT = Path(__file__).resolve().parents[1]
+if str(EWFS_ROOT) not in sys.path:
+    sys.path.insert(0, str(EWFS_ROOT))
+
+from circuits.agents import AGENTS
 
 # define directories
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DATA_DIR = PROJECT_ROOT / "data" / "data_noiseless_simulation"
 PLOTS_DIR = PROJECT_ROOT / "results" / "plots" / "plots_noiseless_simulation"
 NOISELESS_PLOT_FOLD = 18
@@ -86,21 +91,7 @@ def save_circuit_plot(qc, agent_name, plots_dir):
     agent_dir = plots_dir / safe_name
     agent_dir.mkdir(parents=True, exist_ok=True)
 
-    plot_qc = qc.copy()
-    plot_qc.global_phase = 0
-
-    # Qiskit's matplotlib drawer returns a figure that we can save directly.
-    fig = plot_qc.draw(
-        output="mpl",
-        fold=NOISELESS_PLOT_FOLD,
-        scale=1.2,
-        style={
-            "fontsize": NOISELESS_PLOT_FONTSIZE,
-            "subfontsize": NOISELESS_PLOT_SUBFONTSIZE,
-        },
-    )
-    clean_circuit_plot_labels(fig)
-    fig.suptitle(f"{agent_name} - Quantum Circuit", fontsize=20)
+    fig = make_circuit_plot_figure(qc, agent_name)
 
     png_path = agent_dir / f"{safe_name}_circuit.png"
     fig.savefig(png_path, dpi=300, bbox_inches="tight")
@@ -109,6 +100,30 @@ def save_circuit_plot(qc, agent_name, plots_dir):
         fig._suptitle.remove()
     fig.savefig(png_path.with_suffix(".pdf"), dpi=300, bbox_inches="tight")
     plt.close(fig)
+
+
+def make_circuit_plot_figure(qc, agent_name, title=True, fold=NOISELESS_PLOT_FOLD):
+    """Create one circuit diagram figure without saving it."""
+    plot_qc = qc.copy()
+    plot_qc.global_phase = 0
+
+    draw_kwargs = {
+        "output": "mpl",
+        "scale": 1.2,
+        "style": {
+            "fontsize": NOISELESS_PLOT_FONTSIZE,
+            "subfontsize": NOISELESS_PLOT_SUBFONTSIZE,
+        },
+    }
+    if fold is not None:
+        draw_kwargs["fold"] = fold
+
+    # Qiskit's matplotlib drawer returns a figure that notebooks can display.
+    fig = plot_qc.draw(**draw_kwargs)
+    clean_circuit_plot_labels(fig)
+    if title:
+        fig.suptitle(f"{agent_name} - Quantum Circuit", fontsize=20)
+    return fig
 
 
 def clean_circuit_plot_labels(fig):

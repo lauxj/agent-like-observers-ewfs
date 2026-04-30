@@ -15,6 +15,7 @@ import re
 from collections import Counter
 from collections.abc import Iterable
 from pathlib import Path
+import sys
 
 import matplotlib
 matplotlib.use("Agg")
@@ -23,26 +24,22 @@ import networkx as nx
 import numpy as np
 from qiskit_ibm_runtime.fake_provider import FakeMarrakesh, FakeTorino
 
-try:
-    from ewfs.agents import (
-        build_circuit_always_large,
-        build_circuit_betting,
-        build_circuit_guessing,
-        build_circuit_reflex,
-    )
-except ModuleNotFoundError:
-    from agents import (
-        build_circuit_always_large,
-        build_circuit_betting,
-        build_circuit_guessing,
-        build_circuit_reflex,
-    )
+EWFS_ROOT = Path(__file__).resolve().parents[1]
+if str(EWFS_ROOT) not in sys.path:
+    sys.path.insert(0, str(EWFS_ROOT))
+
+from circuits.agents import (
+    build_circuit_always_large,
+    build_circuit_betting,
+    build_circuit_guessing,
+    build_circuit_reflex,
+)
 
 if not hasattr(np, "alltrue"):
     np.alltrue = np.all
 
 
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
 OUTPUT_DIR = PROJECT_ROOT / "results" / "plots" / "plots_backend_connectivity"
 
 # Change this to "ibm_torino" or "ibm_marrakesh".
