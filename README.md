@@ -63,6 +63,12 @@ On Windows, activate the environment with:
 .venv\Scripts\activate
 ```
 
+To open the demo notebook, run:
+
+```bash
+python -m notebook notebooks/project_demo.ipynb
+```
+
 
 ## Usage
 
@@ -76,12 +82,17 @@ New runs are saved in the normal data folders:
 - `data/data_fake_hardware/`
 - `data/data_real_hardware/`
 
-To reproduce the thesis plots, open `scripts/evaluation.py`, by using the runs in `data/paperdata/`. 
+To reproduce the thesis plots, open `scripts/evaluation.py` and use the runs in `data/paperdata/`.
 It can also be switched to use newly generated runs from the normal data folders.
 
 Real IBM hardware runs require an IBM Quantum API token saved locally. The
 noiseless simulation, fake-hardware simulation, and evaluation from saved data
 do not require submitting new hardware jobs.
+
+Transpilation and fake-hardware simulation do not submit real hardware jobs, but
+they still load an IBM backend through Qiskit. Those sections therefore also
+need the IBM Quantum API token below. The noiseless simulation and saved-data
+evaluation can be run without it.
 
 ## IBM Quantum API Token
 

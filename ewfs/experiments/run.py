@@ -53,8 +53,9 @@ SAVE_IBM_TRANSPILATION_PLOTS = True
 DO_FAKE_HARDWARE_SIM = True
 FAKE_HARDWARE_SHOTS = 10_000
 
-# Real hardware
-DO_REAL_HARDWARE = True
+# Real hardware. Keep this off by default to avoid submitting IBM jobs
+# accidentally when running this file directly.
+DO_REAL_HARDWARE = False
 REAL_HARDWARE_SHOTS = 1_000
 
 # Accuracy-test circuits

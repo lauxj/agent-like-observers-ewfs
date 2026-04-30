@@ -38,7 +38,7 @@ NOISELESS_SHOTS = 100_000
 FAKE_HARDWARE_SHOTS = 10_000
 REAL_HARDWARE_SHOTS = 1_000
 
-# choose if relaxed LF accuracy tests should be included or not (only for real hardware)
+# choose if relaxed LF accuracy tests should be included
 INCLUDE_ACCURACY_TESTS = True
 
 #------------------------------------------------------------------------------
