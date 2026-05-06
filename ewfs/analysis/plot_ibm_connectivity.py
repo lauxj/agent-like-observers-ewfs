@@ -173,15 +173,15 @@ BACKEND_SPECS = {
         "agent_output_prefix": OUTPUT_DIR / "ibm_marrakesh_agent_connectivity_simple",
         "figure_size": (26, 18),
         "agent_figure_size": (26, 6.4),
-        "node_size": 2600,
+        "node_size": 1650,
         "agent_node_size": 1650,
         "agent_backdrop_node_size": 280,
-        "edge_width": 6,
+        "edge_width": 4,
         "agent_edge_width": 4,
         "agent_backdrop_edge_width": 1.8,
-        "label_size": 20,
+        "label_size": 16,
         "agent_label_size": 12,
-        "title_size": 30,
+        "title_size": 26,
         "agent_title_size": 22,
         "title": (
             "ibm_marrakesh Coupling Map (latest hard-coded real-hardware layout)\n"
@@ -235,10 +235,28 @@ def load_svg_qubit_coordinates(svg_path: Path, expected_qubits: int) -> dict[int
     if len(matches) != expected_qubits:
         raise ValueError(f"Expected {expected_qubits} coordinates in {svg_path.name}, found {len(matches)}.")
 
+    x_values = sorted({float(x) for x, _ in matches})
+    y_values = sorted({float(y) for _, y in matches})
+    x_step = median_grid_step(x_values)
+    y_step = median_grid_step(y_values)
+    target_step = 52.0
+
     return {
-        index: (float(x), -0.9 * float(y))
+        index: (float(x) * target_step / x_step, -float(y) * target_step / y_step)
         for index, (x, y) in enumerate(matches)
     }
+
+
+def median_grid_step(values: list[float]) -> float:
+    """Return the median nonzero spacing between sorted grid coordinates."""
+    steps = [
+        right - left
+        for left, right in zip(values, values[1:])
+        if right - left > 1e-9
+    ]
+    if not steps:
+        return 1.0
+    return float(np.median(steps))
 
 
 def build_backend_graph(backend_name: str) -> nx.Graph:
@@ -254,8 +272,11 @@ def output_prefix_with_suffix(backend_name: str, suffix: str) -> Path:
     return BACKEND_SPECS[backend_name]["output_prefix"].with_suffix(f".{suffix}")
 
 
-def agent_output_prefix_with_suffix(backend_name: str, suffix: str) -> Path:
-    return BACKEND_SPECS[backend_name]["agent_output_prefix"].with_suffix(f".{suffix}")
+def agent_output_prefix_with_suffix(backend_name: str, suffix: str, stem_suffix: str = "") -> Path:
+    prefix = BACKEND_SPECS[backend_name]["agent_output_prefix"]
+    if stem_suffix:
+        prefix = prefix.with_name(prefix.name + stem_suffix)
+    return prefix.with_suffix(f".{suffix}")
 
 
 def betting_edges_from_layout(layout: list[int]) -> list[tuple[int, int]]:
@@ -300,7 +321,7 @@ def agent_plot_data(agent_name: str, layout: list[int]) -> dict[str, object]:
     ]
     red_edges = [edge for edge in highlighted_edges if edge not in green_edges]
     labels = {
-        physical: ("" if logical_names[index] in {"AC", "BC"} else logical_names[index])
+        physical: logical_names[index]
         for index, physical in enumerate(layout)
     }
     node_groups = {
@@ -549,31 +570,43 @@ def plot_backend_betting_layout_simple(backend_name: str = BACKEND_NAME, save: b
 
     ax.axis("off")
     ax.set_aspect("equal")
+    ax.margins(x=0.01, y=0.01)
     plt.tight_layout()
 
     if save:
-        plt.savefig(output_prefix_with_suffix(backend_name, "png"), bbox_inches="tight", pad_inches=0.2)
+        plt.savefig(output_prefix_with_suffix(backend_name, "png"), bbox_inches="tight", pad_inches=0.05)
         title.remove()
-        plt.savefig(output_prefix_with_suffix(backend_name, "pdf"), bbox_inches="tight", pad_inches=0.2)
+        plt.savefig(output_prefix_with_suffix(backend_name, "pdf"), bbox_inches="tight", pad_inches=0.05)
         plt.close(fig)
         return None
 
     return fig
 
 
-def plot_backend_agent_connectivity_simple(backend_name: str = BACKEND_NAME, save: bool = True):
+def _plot_backend_agent_connectivity_grid(
+    backend_name: str,
+    save: bool,
+    rows: int,
+    cols: int,
+    figure_size: tuple[float, float],
+    stem_suffix: str = "",
+    box_aspect: float = 0.36,
+    hspace: float | None = None,
+):
     """Render each agent's connectivity using only its assigned qubits."""
     if backend_name not in BACKEND_SPECS:
         known = ", ".join(sorted(BACKEND_SPECS))
         raise ValueError(f"Unknown backend '{backend_name}'. Known backends: {known}")
+    if rows * cols < len(AGENT_BUILDERS):
+        raise ValueError(f"Grid {rows}x{cols} cannot fit {len(AGENT_BUILDERS)} agents.")
 
     spec = BACKEND_SPECS[backend_name]
     graph = build_backend_graph(backend_name)
     positions = get_backend_positions(backend_name, graph)
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
-    fig, axes = plt.subplots(1, len(AGENT_BUILDERS), figsize=spec["agent_figure_size"])
-    axes = np.atleast_1d(axes)
+    fig, axes = plt.subplots(rows, cols, figsize=figure_size)
+    axes = np.atleast_1d(axes).ravel()
     panel_data = []
     max_x_span = 0.0
     max_y_span = 0.0
@@ -663,21 +696,58 @@ def plot_backend_agent_connectivity_simple(backend_name: str = BACKEND_NAME, sav
         y_center = 0.5 * (y_limits[0] + y_limits[1])
         ax.set_xlim(x_center - 0.5 * max_x_span, x_center + 0.5 * max_x_span)
         ax.set_ylim(y_center - 0.5 * max_y_span, y_center + 0.5 * max_y_span)
-        ax.set_box_aspect(0.36)
+        ax.set_box_aspect(box_aspect)
         ax.set_aspect("equal")
         ax.axis("off")
 
+    for ax in axes[len(panel_data):]:
+        ax.axis("off")
+
     plt.tight_layout(w_pad=0.05, pad=0.3)
+    if hspace is not None:
+        fig.subplots_adjust(hspace=hspace)
 
     if save:
         for suffix in ("png", "pdf"):
-            plt.savefig(agent_output_prefix_with_suffix(backend_name, suffix), bbox_inches="tight", pad_inches=0.2)
+            plt.savefig(
+                agent_output_prefix_with_suffix(backend_name, suffix, stem_suffix=stem_suffix),
+                bbox_inches="tight",
+                pad_inches=0.2,
+            )
         plt.close(fig)
         return None
 
     return fig
 
 
+def plot_backend_agent_connectivity_simple(backend_name: str = BACKEND_NAME, save: bool = True):
+    """Render each agent's connectivity as a single-row comparison plot."""
+    spec = BACKEND_SPECS[backend_name]
+    return _plot_backend_agent_connectivity_grid(
+        backend_name=backend_name,
+        save=save,
+        rows=1,
+        cols=len(AGENT_BUILDERS),
+        figure_size=spec["agent_figure_size"],
+    )
+
+
+def plot_backend_agent_connectivity_two_rows(backend_name: str = BACKEND_NAME, save: bool = True):
+    """Render each agent's connectivity as a 2x2 comparison plot."""
+    single_row_width, single_row_height = BACKEND_SPECS[backend_name]["agent_figure_size"]
+    return _plot_backend_agent_connectivity_grid(
+        backend_name=backend_name,
+        save=save,
+        rows=2,
+        cols=2,
+        figure_size=(single_row_width * 0.55, single_row_height * 1.05),
+        stem_suffix="_two_rows",
+        box_aspect=0.36,
+        hspace=-0.20,
+    )
+
+
 if __name__ == "__main__":
     plot_backend_betting_layout_simple()
     plot_backend_agent_connectivity_simple()
+    plot_backend_agent_connectivity_two_rows()
