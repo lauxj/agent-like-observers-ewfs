@@ -96,9 +96,9 @@ Noiseless simulation and evaluation from saved data do not need an IBM account.
 ## IBM Quantum API Token
 
 For real hardware runs, and for loading IBM backends, you need access to IBM
-Quantum.
+Quantum. IBM offers free accounts, with 10 minutes of runtime per month offered.
 
-1. Create an IBM Quantum account at `https://quantum.cloud.ibm.com/`.
+1. Create a free IBM Quantum account at `https://quantum.cloud.ibm.com/`.
 2. Log in to the IBM Quantum Platform.
 3. Create or copy an IBM Cloud API key from your account/API key settings.
 4. Save the API key locally with Qiskit:
@@ -108,8 +108,7 @@ python -c "from qiskit_ibm_runtime import QiskitRuntimeService; QiskitRuntimeSer
 ```
 
 Replace `YOUR_IBM_API_KEY` with your IBM Quantum API key. You only need to do
-this once on a machine. After that, Qiskit can load IBM backends from this
-project.
+this oncee. After that, Qiskit can load IBM backends from this project.
 
 ## License
 
