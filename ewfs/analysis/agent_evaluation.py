@@ -51,34 +51,38 @@ PLOTS_ROOT = PROJECT_ROOT / "results" / "plots" / "plots_agent_evaluation"
 # -----------------------------------------------------------------------------
 # Configuration
 
-# Thesis plot typography. Keep the +2 pt adjustment centralized so explicit
-# annotation/legend sizes stay in step with Matplotlib's default text sizes.
-PLOT_FONT_SIZE_DELTA = 2
+# Thesis plot typography. Keep all plot families on one scale so the evaluation
+# section reads coherently when figures are placed side by side.
+PLOT_FONT_SIZE_DELTA = 0
+THESIS_BASE_FONT_SIZE = 12
+AXIS_LABEL_FONT_SIZE = 14
+TICK_LABEL_FONT_SIZE = 14
+LEGEND_FONT_SIZE = 13
+ANNOTATION_FONT_SIZE = 12
+LF_LEGEND_FONT_SIZE = 13
+LF_PANEL_LABEL_FONT_SIZE = 14
+LF_VALUE_LABEL_FONT_SIZE = 11
+LF_LOWER_TICK_FONT_SIZE = 16
+LF_SUMMARY_LABEL_FONT_SIZE = 15
+LF_SUMMARY_VALUE_LABEL_FONT_SIZE = 12
+LF_SUMMARY_LEGEND_FONT_SIZE = 14
+SINGLE_PANEL_FIGSIZE = (9.2, 5.6)
+LF_SINGLE_BACKEND_FIGSIZE = (10.0, 6.1)
+LF_COMPARISON_FIGSIZE = (10.0, 6.4)
+LF_SUMMARY_FIGURE_WIDTH = 10.0
 plt.rcParams.update({
-    "font.size": 10 + PLOT_FONT_SIZE_DELTA,
-    "axes.labelsize": 10 + PLOT_FONT_SIZE_DELTA,
-    "xtick.labelsize": 10 + PLOT_FONT_SIZE_DELTA,
-    "ytick.labelsize": 10 + PLOT_FONT_SIZE_DELTA,
-    "legend.fontsize": 10 + PLOT_FONT_SIZE_DELTA,
+    "font.family": "DejaVu Sans",
+    "mathtext.fontset": "dejavusans",
+    "font.size": THESIS_BASE_FONT_SIZE,
+    "axes.labelsize": AXIS_LABEL_FONT_SIZE,
+    "xtick.labelsize": TICK_LABEL_FONT_SIZE,
+    "ytick.labelsize": TICK_LABEL_FONT_SIZE,
+    "legend.fontsize": LEGEND_FONT_SIZE,
 })
 
 
 def plot_fontsize(points: int) -> int:
     return points + PLOT_FONT_SIZE_DELTA
-
-
-ACCURACY_FONT_EXTRA = 2
-
-
-def accuracy_fontsize(points: int) -> int:
-    return plot_fontsize(points) + ACCURACY_FONT_EXTRA
-
-
-LF_FONT_EXTRA = 2
-
-
-def lf_fontsize(points: int) -> int:
-    return plot_fontsize(points) + LF_FONT_EXTRA
 
 # Choose which saved data to evaluate.
 # "paperdata" uses the frozen thesis runs in data/paperdata.
@@ -146,6 +150,9 @@ LF_AGENT_NAMES = ["Betting Agent", "Guessing Agent", "Reflex Agent", "Always 3/4
 STANDARD_AGENT_NAMES = LF_AGENT_NAMES
 MEMORY_PLOT_AGENT_NAMES = ["Reflex Agent", "Guessing Agent", "Always 3/4 Agent", "Betting Agent"]
 HARDWARE_LF_SUMMARY_AGENT_NAMES = ["Reflex Agent", "Guessing Agent", "Betting Agent", "Always 3/4 Agent"]
+AGENT_DISPLAY_LABELS = {
+    "Always 3/4 Agent": "Always-3/4 Agent",
+}
 LF_TERM_SPECS = [
     ("E11", -1.0, r"$-\langle A_1 B_1 \rangle$"),
     ("E12", 1.0, r"$\langle A_1 B_2 \rangle$"),
@@ -220,7 +227,7 @@ ACCURACY_METRIC_SPECS = {
         "error_key": "guessing_accuracy_stderr",
         "shots_key": "guessing_accuracy_shots",
         "title": "Guessing Agent Accuracy",
-        "ylabel": r"$P(G=S_B)$",
+        "ylabel": r"$P(G=M_2)$",
         "ideal_value": 0.75,
         "ideal_label": "Ideal accuracy = 0.75",
         "show_legend": True,
@@ -273,16 +280,35 @@ ACCURACY_METRIC_SPECS = {
 # -----------------------------------------------------------------------------
 # Small plotting helpers
 
+def apply_thesis_axis_typography(ax):
+    ax.xaxis.label.set_size(AXIS_LABEL_FONT_SIZE)
+    ax.yaxis.label.set_size(AXIS_LABEL_FONT_SIZE)
+    ax.tick_params(axis="both", labelsize=TICK_LABEL_FONT_SIZE)
+
+
+def set_thesis_xticklabels(ax, labels, *, rotation=0, ha="center", fontsize: int = TICK_LABEL_FONT_SIZE):
+    ax.set_xticklabels(
+        labels,
+        rotation=rotation,
+        ha=ha,
+        fontsize=fontsize,
+    )
+
+
+def set_thesis_yticklabels(ax, labels, *, fontsize: int = TICK_LABEL_FONT_SIZE):
+    ax.set_yticklabels(labels, fontsize=fontsize)
+
+
 def style_bar_axes(ax, title: str, ylabel: str):
     ax.set_ylabel(ylabel)
+    apply_thesis_axis_typography(ax)
     ax.grid(axis="y", alpha=0.25)
     ax.set_axisbelow(True)
 
 
 def style_accuracy_axes(ax, ylabel: str):
     ax.set_ylabel(ylabel)
-    ax.yaxis.label.set_size(accuracy_fontsize(12))
-    ax.tick_params(axis="both", labelsize=accuracy_fontsize(10))
+    apply_thesis_axis_typography(ax)
     ax.grid(axis="y", linestyle="--", alpha=0.28)
     ax.set_axisbelow(True)
     for spine in ["top", "right", "bottom", "left"]:
@@ -292,6 +318,7 @@ def style_accuracy_axes(ax, ylabel: str):
 
 def style_memory_axes(ax, ylabel: str):
     ax.set_ylabel(ylabel)
+    apply_thesis_axis_typography(ax)
     ax.grid(axis="y", linestyle="--", alpha=0.28)
     ax.set_axisbelow(True)
     for spine in ["top", "right", "bottom", "left"]:
@@ -305,7 +332,7 @@ def set_probability_axis_ticks(ax, y_max: float):
     else:
         ticks = np.linspace(0.0, 1.0, 6)
     ax.set_yticks(ticks)
-    ax.set_yticklabels([f"{tick:.1f}" for tick in ticks])
+    set_thesis_yticklabels(ax, [f"{tick:.1f}" for tick in ticks])
 
 
 def place_legend_above_axes(fig, ax, *, ncol: int = 1, fontsize: int = 10, handles=None):
@@ -660,6 +687,10 @@ def result_display_label(result) -> str:
 
 def result_axis_label(result) -> str:
     return result.get("axis_label", build_backend_axis_label(result["label"], result.get("backend_name")))
+
+
+def agent_display_label(agent_name: str) -> str:
+    return AGENT_DISPLAY_LABELS.get(agent_name, agent_name)
 
 
 def backend_lf_panel_label(result) -> str:
@@ -1062,11 +1093,11 @@ def annotate_vertical_bars(
             label,
             ha="center",
             va=va,
-            fontsize=plot_fontsize(9) if fontsize is None else fontsize,
+            fontsize=ANNOTATION_FONT_SIZE if fontsize is None else fontsize,
         )
 
 
-def annotate_custom_bar_labels(ax, bars, values, errors, y_positions, *, vas=None):
+def annotate_custom_bar_labels(ax, bars, values, errors, y_positions, *, vas=None, bbox=None):
     if vas is None:
         vas = ["bottom" if value >= 0 else "top" for value in values]
 
@@ -1078,7 +1109,9 @@ def annotate_custom_bar_labels(ax, bars, values, errors, y_positions, *, vas=Non
             label,
             ha="center",
             va=va,
-            fontsize=plot_fontsize(9),
+            fontsize=ANNOTATION_FONT_SIZE,
+            bbox=bbox,
+            zorder=7,
         )
 
 
@@ -1175,7 +1208,7 @@ def extract_guessing_accuracy(counts):
         min_length=7,
         first_index=GUESSING_G_INDEX_FROM_LEFT,
         second_index=GUESSING_M2_INDEX_FROM_LEFT,
-        bit_names="G and M bits",
+        bit_names="G and M2 bits",
     )
 
 
@@ -1885,14 +1918,15 @@ def plot_combined_memory_epsilon(memory_inaccuracy_summary, output_dir: Path, tr
     output_dir.mkdir(parents=True, exist_ok=True)
 
     agent_names = MEMORY_PLOT_AGENT_NAMES
+    plotted_backend_labels = ["Fake hardware", "Real hardware"]
     x = np.arange(len(agent_names))
-    width = 0.22
+    width = 0.28
     tracking_box_width = 0.78
 
-    fig, ax = plt.subplots(figsize=(11.2, 6.2))
+    fig, ax = plt.subplots(figsize=SINGLE_PANEL_FIGSIZE)
     max_height = 0.0
 
-    for idx, backend_label in enumerate(BACKEND_LABELS):
+    for idx, backend_label in enumerate(plotted_backend_labels):
         backend_result = next(
             backend for backend in memory_inaccuracy_summary["backends"]
             if backend["label"] == backend_label
@@ -1900,7 +1934,7 @@ def plot_combined_memory_epsilon(memory_inaccuracy_summary, output_dir: Path, tr
         combined_agents = backend_result["combined_agents"]
         values = [combined_agents.get(agent, {}).get("epsilon", np.nan) for agent in agent_names]
         errors = [combined_agents.get(agent, {}).get("epsilon_stderr", np.nan) for agent in agent_names]
-        offsets = x + (idx - 1) * width
+        offsets = x + (idx - (len(plotted_backend_labels) - 1) / 2.0) * width
         bars = ax.bar(
             offsets,
             values,
@@ -1916,23 +1950,6 @@ def plot_combined_memory_epsilon(memory_inaccuracy_summary, output_dir: Path, tr
         for value, error in zip(values, errors):
             if np.isfinite(value) and np.isfinite(error):
                 max_height = max(max_height, value + error)
-        if backend_label == "Noiseless":
-            for bar, value, error in zip(bars, values, errors):
-                if np.isclose(value, 0.0) and np.isclose(error, 0.0):
-                    zero_marker_height = 0.00035
-                    draw_zero_marker(ax, bar, bar.get_facecolor(), height=zero_marker_height)
-                    ax.text(
-                        bar.get_x() + bar.get_width() / 2,
-                        zero_marker_height + 0.00018,
-                        "0.0",
-                        ha="center",
-                        va="bottom",
-                        fontsize=plot_fontsize(10),
-                        color="black",
-                        zorder=6,
-                        bbox={"facecolor": "white", "edgecolor": "none", "alpha": 0.85, "pad": 0.4},
-                    )
-
     if tracking_epsilon_max_summary is not None:
         for center, agent_name in zip(x, agent_names):
             agent_summary = tracking_epsilon_max_summary.get("agents", {}).get(agent_name)
@@ -1952,11 +1969,9 @@ def plot_combined_memory_epsilon(memory_inaccuracy_summary, output_dir: Path, tr
             max_height = max(max_height, float(epsilon_max))
 
     ax.set_xticks(x)
-    ax.set_xticklabels(agent_names, rotation=0, ha="center", fontsize=plot_fontsize(12))
+    set_thesis_xticklabels(ax, [agent_display_label(agent_name) for agent_name in agent_names])
     ax.set_ylim(0.0, 0.0225)
     style_memory_axes(ax, r"$P(c \neq a \mid x=1)$")
-    ax.yaxis.label.set_size(plot_fontsize(12))
-    ax.tick_params(axis="y", labelsize=plot_fontsize(12))
     legend_handles = [
         Patch(
             facecolor=MEMORY_BACKEND_COLORS[backend_label],
@@ -1968,13 +1983,19 @@ def plot_combined_memory_epsilon(memory_inaccuracy_summary, output_dir: Path, tr
                 if backend["label"] == backend_label
             ),
         )
-        for backend_label in BACKEND_LABELS
+        for backend_label in plotted_backend_labels
     ]
     if tracking_epsilon_max_summary is not None:
         legend_handles.append(
             Line2D([], [], color=ACCURACY_THEORY_LINE_COLOR, linestyle="--", linewidth=1.8, label=r"Maximum allowed $\epsilon$")
         )
-    place_legend_above_axes(fig, ax, ncol=4 if tracking_epsilon_max_summary is not None else 3, fontsize=12, handles=legend_handles)
+    place_legend_above_axes(
+        fig,
+        ax,
+        ncol=3 if tracking_epsilon_max_summary is not None else 2,
+        fontsize=LEGEND_FONT_SIZE,
+        handles=legend_handles,
+    )
 
     plot_path = output_dir / "combined_memory_initialization_epsilon_comparison.png"
     save_plot(fig, plot_path, dpi=300, bbox_inches="tight")
@@ -1992,7 +2013,7 @@ def plot_born_rule_accuracy(results, output_dir: Path) -> Path:
     target_width = (len(results) - 1) * group_spacing + width + 0.12
     y_max = 1.2
 
-    fig, ax = plt.subplots(figsize=(9.2, 5.6))
+    fig, ax = plt.subplots(figsize=SINGLE_PANEL_FIGSIZE)
     draw_accuracy_target_blocks(
         ax,
         x,
@@ -2031,11 +2052,11 @@ def plot_born_rule_accuracy(results, output_dir: Path) -> Path:
             upper_cap=y_max - 0.02,
             positive_offset=0.02,
             reference_values=[1.0] * len(values),
-            fontsize=accuracy_fontsize(9),
+            fontsize=ANNOTATION_FONT_SIZE,
         )
 
     ax.set_xticks(x)
-    ax.set_xticklabels(categories, fontsize=accuracy_fontsize(10))
+    set_thesis_xticklabels(ax, categories)
     ax.set_ylim(0.0, y_max)
     style_accuracy_axes(ax, "Probability")
     set_probability_axis_ticks(ax, y_max)
@@ -2051,7 +2072,7 @@ def plot_born_rule_accuracy(results, output_dir: Path) -> Path:
     legend_handles.append(
         Line2D([], [], color=ACCURACY_THEORY_LINE_COLOR, linestyle="--", linewidth=2.0, label="Ideal target")
     )
-    place_legend_above_axes(fig, ax, ncol=2, fontsize=12, handles=legend_handles)
+    place_legend_above_axes(fig, ax, ncol=2, fontsize=LEGEND_FONT_SIZE, handles=legend_handles)
 
     plot_path = output_dir / "betting_agent_accuracy_comparison.png"
     save_plot(fig, plot_path, dpi=300, bbox_inches="tight")
@@ -2073,7 +2094,7 @@ def plot_always_large_vs_betting_payoff_comparison(results, output_dir: Path) ->
     born_rule_theory = theory_payoff_for_policy("betting")
     always_large_theory = theory_payoff_for_policy("always_large")
 
-    fig, ax = plt.subplots(figsize=(7.4, 4.8))
+    fig, ax = plt.subplots(figsize=SINGLE_PANEL_FIGSIZE)
     born_rule_bars = ax.bar(
         x - width / 2,
         born_rule_values,
@@ -2115,9 +2136,6 @@ def plot_always_large_vs_betting_payoff_comparison(results, output_dir: Path) ->
         else:
             always_large_text_y.append(value - error - 0.015)
             always_large_text_va.append("top")
-    if len(always_large_text_y) >= 3:
-        # Keep the real-hardware label clear of the red theoretical target box.
-        always_large_text_y[2] = always_large_text_y[1]
     annotate_custom_bar_labels(
         ax,
         always_large_bars,
@@ -2125,6 +2143,7 @@ def plot_always_large_vs_betting_payoff_comparison(results, output_dir: Path) ->
         always_large_errors,
         always_large_text_y,
         vas=always_large_text_va,
+        bbox={"facecolor": "white", "edgecolor": "none", "alpha": 1.0, "pad": 1.0},
     )
 
     for bar in born_rule_bars:
@@ -2137,27 +2156,18 @@ def plot_always_large_vs_betting_payoff_comparison(results, output_dir: Path) ->
             linewidth=1.8,
             zorder=4,
         )
-    for bar in always_large_bars:
-        ax.hlines(
-            y=always_large_theory,
-            xmin=bar.get_x() + 0.04,
-            xmax=bar.get_x() + bar.get_width() - 0.04,
-            colors="#C92A2A",
-            linestyles="--",
-            linewidth=1.8,
-            zorder=4,
-        )
+    ax.axhline(always_large_theory, color="#C92A2A", linestyle="--", linewidth=1.8, zorder=4)
 
     ax.axhline(0.0, color=IDEAL_COLOR, linewidth=1.0)
     ax.set_xticks(x)
-    ax.set_xticklabels(backend_labels)
+    set_thesis_xticklabels(ax, backend_labels)
     ax.set_ylim(-0.33, 0.12)
     style_bar_axes(ax, "Betting Agent vs Always-3/4 Payoff", "Expected payoff")
     place_legend_above_axes(
         fig,
         ax,
         ncol=3,
-        fontsize=9,
+        fontsize=LEGEND_FONT_SIZE,
         handles=[
             Patch(facecolor=THEORY_COMPARISON_COLORS["Born-rule"], edgecolor="black", label="Betting Agent"),
             Patch(facecolor=THEORY_COMPARISON_COLORS["Always 3/4"], edgecolor="black", label="Always-3/4 agent"),
@@ -2201,7 +2211,7 @@ def plot_backend_lf_correlator_comparisons(results, output_dir: Path, backend_la
         fig, (ax1, ax2) = plt.subplots(
             2,
             1,
-            figsize=(10, 6.1),
+            figsize=LF_SINGLE_BACKEND_FIGSIZE,
             gridspec_kw={"height_ratios": [1.8, 1], "hspace": 0.15},
         )
 
@@ -2231,17 +2241,16 @@ def plot_backend_lf_correlator_comparisons(results, output_dir: Path, backend_la
             )
 
         ax1.set_xticks(x_pos)
-        ax1.set_xticklabels(LF_CORRELATOR_LABELS, fontsize=lf_fontsize(12))
+        set_thesis_xticklabels(ax1, LF_CORRELATOR_LABELS)
         ax1.set_xlim(-0.8, len(LF_TERM_SPECS) - 0.2)
         ax1.set_ylim(-0.8, 0.8)
         ax1.set_ylabel("Correlator value")
-        ax1.yaxis.label.set_size(lf_fontsize(10))
-        ax1.tick_params(axis="y", labelsize=lf_fontsize(10))
+        apply_thesis_axis_typography(ax1)
         ax1.axhline(0, color="black", linewidth=0.8, zorder=1)
         ax1.grid(axis="y", alpha=0.25)
         ax1.plot([], [], color="red", linestyle="--", linewidth=2, label="Ideal theoretical value")
         ax1.plot([], [], color="black", linewidth=1.5, marker="|", markersize=10, label="Standard error of the mean (SEM)")
-        ax1.legend(loc="upper right", fontsize=lf_fontsize(8), frameon=True)
+        ax1.legend(loc="upper right", fontsize=LF_LEGEND_FONT_SIZE, frameon=True)
 
         left_exp = violation_offset
         left_th = violation_offset
@@ -2295,25 +2304,25 @@ def plot_backend_lf_correlator_comparisons(results, output_dir: Path, backend_la
             cumulative_centers.append(left_exp)
             cumulative_errors.append(np.sqrt(cumulative_variance))
 
-        threshold_ymin = 0.0
-        threshold_ymax = 0.97
+        threshold_ymin = -(bar_height + 0.28) / 2.0
+        threshold_ymax = (bar_height + 0.28) / 2.0
         for threshold in [0.0, tsirelson_violation]:
-            ax2.axvline(
-                x=threshold,
-                color="red",
-                linewidth=2.2,
-                ymin=threshold_ymin,
-                ymax=threshold_ymax,
+            ax2.vlines(
+                threshold,
+                threshold_ymin,
+                threshold_ymax,
+                colors="red",
+                linewidth=2.0,
                 zorder=5,
             )
         if SHOW_FOUR_EPSILON_IN_BACKEND_LF_PLOTS and four_epsilon is not None:
-            line_top_y = -1.0 + threshold_ymax * (1.0 - (-1.0))
-            ax2.axvline(
-                x=four_epsilon,
-                color="black",
+            line_top_y = threshold_ymax
+            ax2.vlines(
+                four_epsilon,
+                threshold_ymin,
+                threshold_ymax,
+                colors="black",
                 linewidth=2.0,
-                ymin=threshold_ymin,
-                ymax=threshold_ymax,
                 zorder=6,
             )
             ax2.text(
@@ -2322,7 +2331,7 @@ def plot_backend_lf_correlator_comparisons(results, output_dir: Path, backend_la
                 f"$4\\epsilon$ = {four_epsilon:.3f}",
                 ha="left",
                 va="top",
-                fontsize=lf_fontsize(9),
+                fontsize=LF_VALUE_LABEL_FONT_SIZE,
                 zorder=7,
                 bbox={"facecolor": "white", "edgecolor": "none", "alpha": 0.9, "pad": 1.0},
             )
@@ -2360,7 +2369,7 @@ def plot_backend_lf_correlator_comparisons(results, output_dir: Path, backend_la
             f"S = {final_violation:.3f}\n± {final_sigma:.3f}",
             ha="left",
             va="center",
-            fontsize=lf_fontsize(8),
+            fontsize=LF_VALUE_LABEL_FONT_SIZE,
             zorder=7,
             bbox={"facecolor": "white", "edgecolor": "none", "alpha": 0.9, "pad": 1.5},
         )
@@ -2378,7 +2387,7 @@ def plot_backend_lf_correlator_comparisons(results, output_dir: Path, backend_la
             transform=ax2.get_yaxis_transform(),
             ha="center",
             va="center",
-            fontsize=lf_fontsize(9),
+            fontsize=LF_PANEL_LABEL_FONT_SIZE,
             clip_on=False,
             zorder=7,
             bbox={"facecolor": "white", "edgecolor": "none", "alpha": 0.9, "pad": 1.2},
@@ -2387,7 +2396,7 @@ def plot_backend_lf_correlator_comparisons(results, output_dir: Path, backend_la
             ax2.spines[spine].set_visible(False)
 
         ax2.set_xticks([violation_offset, 0.0, tsirelson_violation])
-        ax2.set_xticklabels(["-2", "0", r"$2\sqrt{2}-2$"], fontsize=lf_fontsize(12))
+        set_thesis_xticklabels(ax2, ["-2", "0", r"$2\sqrt{2}-2$"], fontsize=LF_LOWER_TICK_FONT_SIZE)
         ax2.spines["bottom"].set_linewidth(1.5)
 
         fig.subplots_adjust(left=0.16, right=0.97, top=0.92, bottom=0.12, hspace=0.18)
@@ -2439,7 +2448,7 @@ def plot_hardware_lf_comparison_per_agent(results, output_dir: Path, memory_inac
         fig, (ax1, ax2) = plt.subplots(
             2,
             1,
-            figsize=(10, 6.4),
+            figsize=LF_COMPARISON_FIGSIZE,
             gridspec_kw={"height_ratios": [1.8, 1.3], "hspace": 0.18},
         )
 
@@ -2484,12 +2493,11 @@ def plot_hardware_lf_comparison_per_agent(results, output_dir: Path, memory_inac
             )
 
         ax1.set_xticks(x_pos)
-        ax1.set_xticklabels(LF_CORRELATOR_LABELS, fontsize=lf_fontsize(12))
+        set_thesis_xticklabels(ax1, LF_CORRELATOR_LABELS)
         ax1.set_xlim(-0.8, len(LF_TERM_SPECS) - 0.2)
         ax1.set_ylim(-0.8, 0.8)
         ax1.set_ylabel("Correlator value")
-        ax1.yaxis.label.set_size(lf_fontsize(10))
-        ax1.tick_params(axis="y", labelsize=lf_fontsize(10))
+        apply_thesis_axis_typography(ax1)
         ax1.axhline(0, color="black", linewidth=0.8, zorder=1)
         ax1.grid(axis="y", alpha=0.25)
         hardware_handles = [
@@ -2498,7 +2506,7 @@ def plot_hardware_lf_comparison_per_agent(results, output_dir: Path, memory_inac
             Line2D([], [], color="red", linestyle="--", linewidth=2, label="Ideal theoretical value"),
             Line2D([], [], color="black", linewidth=1.5, marker="|", markersize=10, label="Standard error of the mean (SEM)"),
         ]
-        ax1.legend(handles=hardware_handles, loc="upper right", fontsize=lf_fontsize(8), frameon=True)
+        ax1.legend(handles=hardware_handles, loc="upper right", fontsize=LF_LEGEND_FONT_SIZE, frameon=True)
 
         row_specs = [
             (fake_label, 0.22, signed_fake_values, signed_fake_errors, fake_s_summary, fake_run_count),
@@ -2590,7 +2598,7 @@ def plot_hardware_lf_comparison_per_agent(results, output_dir: Path, memory_inac
                 f"S = {final_violation:.3f}\n± {final_sigma:.3f}",
                 ha="left",
                 va="center",
-                fontsize=lf_fontsize(7),
+                fontsize=LF_VALUE_LABEL_FONT_SIZE,
                 zorder=7,
                 bbox={"facecolor": "white", "edgecolor": "none", "alpha": 0.9, "pad": 1.5},
             )
@@ -2624,7 +2632,7 @@ def plot_hardware_lf_comparison_per_agent(results, output_dir: Path, memory_inac
                 f"$4\\epsilon$ = {four_epsilon:.3f}",
                 ha="left",
                 va="top",
-                fontsize=lf_fontsize(9),
+                fontsize=LF_VALUE_LABEL_FONT_SIZE,
                 zorder=7,
                 bbox={"facecolor": "white", "edgecolor": "none", "alpha": 0.9, "pad": 1.0},
             )
@@ -2640,7 +2648,7 @@ def plot_hardware_lf_comparison_per_agent(results, output_dir: Path, memory_inac
             transform=ax2.get_yaxis_transform(),
             ha="center",
             va="center",
-            fontsize=lf_fontsize(9),
+            fontsize=LF_PANEL_LABEL_FONT_SIZE,
             multialignment="center",
             clip_on=False,
             zorder=7,
@@ -2653,7 +2661,7 @@ def plot_hardware_lf_comparison_per_agent(results, output_dir: Path, memory_inac
             transform=ax2.get_yaxis_transform(),
             ha="center",
             va="center",
-            fontsize=lf_fontsize(9),
+            fontsize=LF_PANEL_LABEL_FONT_SIZE,
             clip_on=False,
             zorder=7,
             bbox={"facecolor": "white", "edgecolor": "none", "alpha": 0.9, "pad": 1.2},
@@ -2662,7 +2670,7 @@ def plot_hardware_lf_comparison_per_agent(results, output_dir: Path, memory_inac
             ax2.spines[spine].set_visible(False)
         ax2.spines["left"].set_visible(False)
         ax2.set_xticks([violation_offset, 0.0, tsirelson_violation])
-        ax2.set_xticklabels(["-2", "0", r"$2\sqrt{2}-2$"], fontsize=lf_fontsize(12))
+        set_thesis_xticklabels(ax2, ["-2", "0", r"$2\sqrt{2}-2$"], fontsize=LF_LOWER_TICK_FONT_SIZE)
         ax2.spines["bottom"].set_linewidth(1.5)
 
         fig.subplots_adjust(left=0.22, right=0.992, top=0.92, bottom=0.10, hspace=0.18)
@@ -2710,7 +2718,7 @@ def plot_hardware_lf_agent_summary(
     signed_ideal_values = np.array([sign * LF_ANALYTIC_CORRELATORS[key] for key, sign, _ in LF_TERM_SPECS])
 
     fig_height = 4.8 + 0.75 * len(agent_rows)
-    fig, ax = plt.subplots(figsize=(10.8, fig_height))
+    fig, ax = plt.subplots(figsize=(LF_SUMMARY_FIGURE_WIDTH, fig_height))
 
     row_positions = np.arange(len(agent_rows))[::-1]
     bar_height = 0.5
@@ -2789,7 +2797,7 @@ def plot_hardware_lf_agent_summary(
             f"S = {final_violation:.3f}\n± {final_sigma:.3f}",
             ha="left",
             va="center",
-            fontsize=plot_fontsize(9),
+            fontsize=LF_SUMMARY_VALUE_LABEL_FONT_SIZE,
             zorder=7,
             bbox={"facecolor": "white", "edgecolor": "none", "alpha": 0.9, "pad": 1.4},
         )
@@ -2822,7 +2830,7 @@ def plot_hardware_lf_agent_summary(
                     marker_label,
                     ha="center",
                     va="bottom",
-                    fontsize=plot_fontsize(8),
+                    fontsize=LF_SUMMARY_VALUE_LABEL_FONT_SIZE,
                     zorder=7,
                     bbox={"facecolor": "white", "edgecolor": "none", "alpha": 0.85, "pad": 0.8},
                 )
@@ -2839,13 +2847,17 @@ def plot_hardware_lf_agent_summary(
     ax.set_xlim(violation_offset, max_right_limit)
     ax.set_ylim(-0.7, len(agent_rows) - 0.3)
     ax.set_yticks(row_positions)
-    ax.set_yticklabels([row["agent_name"] for row in agent_rows], fontsize=plot_fontsize(11))
+    set_thesis_yticklabels(
+        ax,
+        [agent_display_label(row["agent_name"]) for row in agent_rows],
+        fontsize=LF_SUMMARY_LABEL_FONT_SIZE,
+    )
     ax.grid(axis="x", linestyle="--", alpha=0.25)
     for spine in ["top", "right"]:
         ax.spines[spine].set_visible(False)
     ax.spines["left"].set_visible(False)
     ax.set_xticks([violation_offset, 0.0, tsirelson_violation])
-    ax.set_xticklabels(["-2", "0", r"$2\sqrt{2}-2$"], fontsize=plot_fontsize(12))
+    set_thesis_xticklabels(ax, ["-2", "0", r"$2\sqrt{2}-2$"], fontsize=LF_LOWER_TICK_FONT_SIZE)
     ax.spines["bottom"].set_linewidth(1.5)
 
     legend_handles = [
@@ -2862,7 +2874,7 @@ def plot_hardware_lf_agent_summary(
         fig,
         ax,
         ncol=3,
-        fontsize=10,
+        fontsize=LF_SUMMARY_LEGEND_FONT_SIZE,
         handles=legend_handles,
     )
 
@@ -2904,7 +2916,7 @@ def plot_accuracy_comparison(
     bar_width = 0.62
     target_width = 0.82
 
-    fig, ax = plt.subplots(figsize=(9.2, 5.6))
+    fig, ax = plt.subplots(figsize=SINGLE_PANEL_FIGSIZE)
     bars = ax.bar(
         x,
         values,
@@ -2931,11 +2943,11 @@ def plot_accuracy_comparison(
         upper_cap=y_max - 0.02,
         positive_offset=0.02,
         reference_values=[ideal_value] * len(values),
-        fontsize=accuracy_fontsize(9),
+        fontsize=ANNOTATION_FONT_SIZE,
     )
 
     ax.set_xticks(x)
-    ax.set_xticklabels([result_axis_label(result_for_label(results, label)) for label in BACKEND_LABELS], fontsize=accuracy_fontsize(10))
+    set_thesis_xticklabels(ax, [result_axis_label(result_for_label(results, label)) for label in BACKEND_LABELS])
     ax.set_ylim(0.0, y_max)
     style_accuracy_axes(ax, ylabel)
     set_probability_axis_ticks(ax, y_max)
@@ -2944,7 +2956,7 @@ def plot_accuracy_comparison(
             fig,
             ax,
             ncol=1,
-            fontsize=12,
+            fontsize=LEGEND_FONT_SIZE,
             handles=[Line2D([], [], color=ACCURACY_THEORY_LINE_COLOR, linestyle="--", linewidth=2.0, label=ideal_label)],
         )
     else:

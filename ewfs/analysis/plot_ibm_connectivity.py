@@ -66,6 +66,14 @@ AGENT_BUILDERS = {
     "Betting Agent": build_circuit_betting,
 }
 
+AGENT_DISPLAY_LABELS = {
+    "Always 3/4 Agent": "Always-3/4 Agent",
+}
+
+
+def agent_display_label(agent_name: str) -> str:
+    return AGENT_DISPLAY_LABELS.get(agent_name, agent_name)
+
 
 def ordered_qubit_names(circuit) -> list[str]:
     names: list[str] = []
@@ -155,7 +163,7 @@ BACKEND_SPECS = {
         ),
         "agent_title": (
             "ibm_torino agent connectivity (March 30, 2026)\n"
-            "Reflex, Guessing, Always 3/4, and Betting agent structure only"
+            "Reflex, Guessing, Always-3/4, and Betting agent structure only"
         ),
         "betting_layout": [68, 67, 66, 74, 65, 86, 18, 131],
         "agent_layouts": {
@@ -173,14 +181,14 @@ BACKEND_SPECS = {
         "agent_output_prefix": OUTPUT_DIR / "ibm_marrakesh_agent_connectivity_simple",
         "figure_size": (26, 18),
         "agent_figure_size": (26, 6.4),
-        "node_size": 1650,
-        "agent_node_size": 1650,
+        "node_size": 2050,
+        "agent_node_size": 1900,
         "agent_backdrop_node_size": 280,
-        "edge_width": 4,
-        "agent_edge_width": 4,
-        "agent_backdrop_edge_width": 1.8,
-        "label_size": 16,
-        "agent_label_size": 12,
+        "edge_width": 5,
+        "agent_edge_width": 5,
+        "agent_backdrop_edge_width": 2.2,
+        "label_size": 18,
+        "agent_label_size": 14,
         "title_size": 26,
         "agent_title_size": 22,
         "title": (
@@ -189,7 +197,7 @@ BACKEND_SPECS = {
         ),
         "agent_title": (
             "ibm_marrakesh agent connectivity (latest hard-coded real-hardware layouts)\n"
-            "Reflex, Guessing, Always 3/4, and Betting agent structure only"
+            "Reflex, Guessing, Always-3/4, and Betting agent structure only"
         ),
         "betting_layout": [18, 11, 12, 10, 13, 9, 0, 155],
         "agent_layouts": {
@@ -691,7 +699,7 @@ def _plot_backend_agent_connectivity_grid(
             ax=ax,
         )
 
-        ax.set_title(agent_name, fontsize=spec["agent_title_size"], y=0.96)
+        ax.set_title(agent_display_label(agent_name), fontsize=spec["agent_title_size"], y=0.96)
         x_center = 0.5 * (x_limits[0] + x_limits[1])
         y_center = 0.5 * (y_limits[0] + y_limits[1])
         ax.set_xlim(x_center - 0.5 * max_x_span, x_center + 0.5 * max_x_span)
