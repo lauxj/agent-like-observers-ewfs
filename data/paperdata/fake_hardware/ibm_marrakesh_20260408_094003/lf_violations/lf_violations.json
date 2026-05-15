@@ -1,7 +1,7 @@
 {
   "kind": "lf_violations",
   "source_file": "fake_hardware_noise_sim.json",
-  "source_path": "/Users/joshua/PycharmProjects/masters_thesis_project/data/data_fake_hardware/ibm_marrakesh_20260408_094003/fake_hardware_noise_sim.json",
+  "source_path": "/Users/joshua/PycharmProjects/agent-like-observers-ewfs/data/data_fake_hardware/ibm_marrakesh_20260408_094003/fake_hardware_noise_sim.json",
   "agents": {
     "Betting Agent": {
       "S": 0.6249455462038522,

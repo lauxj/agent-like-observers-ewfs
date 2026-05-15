@@ -49,8 +49,8 @@ Use Python 3.10. Newer Python versions may give dependency problems.
 Clone the repository and install the requirements in a virtual environment.
 
 ```bash
-git clone https://github.com/lauxj/masters_thesis_project.git
-cd masters_thesis_project
+git clone https://github.com/lauxj/agent-like-observers-ewfs.git
+cd agent-like-observers-ewfs
 python3.10 -m venv .venv
 source .venv/bin/activate
 python --version  # should show Python 3.10.x

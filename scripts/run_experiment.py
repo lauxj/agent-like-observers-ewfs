@@ -27,7 +27,7 @@ from experiments import run
 # choose which experiments to run (all together is possible)
 RUN_NOISELESS = True
 RUN_FAKE_HARDWARE = True
-RUN_REAL_HARDWARE = False
+RUN_REAL_HARDWARE = True
 
 # choose the backend used for transpilation, fake hardware, and real hardware
 # options: "ibm_marrakesh", "ibm_fez", "ibm_kingston"

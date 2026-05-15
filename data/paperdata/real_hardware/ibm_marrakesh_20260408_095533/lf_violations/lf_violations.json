@@ -1,7 +1,7 @@
 {
   "kind": "lf_violations",
   "source_file": "real_hardware_run.json",
-  "source_path": "/Users/joshua/PycharmProjects/masters_thesis_project/data/data_real_hardware/ibm_marrakesh_20260408_095533/real_hardware_run.json",
+  "source_path": "/Users/joshua/PycharmProjects/agent-like-observers-ewfs/data/data_real_hardware/ibm_marrakesh_20260408_095533/real_hardware_run.json",
   "agents": {
     "Betting Agent": {
       "S": 0.2572427809139013,

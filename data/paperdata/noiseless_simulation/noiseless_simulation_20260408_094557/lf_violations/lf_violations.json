@@ -1,7 +1,7 @@
 {
   "kind": "lf_violations",
   "source_file": "noiseless_simulation.json",
-  "source_path": "/Users/joshua/PycharmProjects/masters_thesis_project/data/data_noiseless_simulation/noiseless_simulation_20260408_094557/noiseless_simulation.json",
+  "source_path": "/Users/joshua/PycharmProjects/agent-like-observers-ewfs/data/data_noiseless_simulation/noiseless_simulation_20260408_094557/noiseless_simulation.json",
   "agents": {
     "Betting Agent": {
       "S": 0.8303818052908918,
