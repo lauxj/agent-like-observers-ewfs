@@ -189,10 +189,10 @@ ACCURACY_BACKEND_COLORS = {
 }
 BACKEND_LABELS = ["Noiseless", "Fake hardware", "Real hardware"]
 BACKEND_DISPLAY_LABELS = {
-    "Noiseless": "Noiseless simulation",
+    "Noiseless": "Ideal simulation",
 }
 BACKEND_AXIS_LABELS = {
-    "Noiseless": "Noiseless\nsimulation",
+    "Noiseless": "Ideal\nsimulation",
 }
 THEORY_COMPARISON_COLORS = {
     "Born-rule": "#9467BD",
